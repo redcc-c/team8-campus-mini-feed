@@ -19,7 +19,6 @@ android {
         applicationId = "com.team8.campus_mini_feed"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // ML Kit GenAI (on-device Gemini Nano) requires API 26.
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
@@ -48,7 +47,6 @@ kotlin {
 flutter {
     source = "../.."
 }
-
 dependencies {
     implementation("com.google.mlkit:genai-proofreading:1.0.0-beta1")
     // Prompt API is used only for countTokens, the Gemini Nano tokenizer.
