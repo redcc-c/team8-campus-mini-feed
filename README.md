@@ -1,6 +1,6 @@
 # 캠퍼스 소통 및 미니 피드 서비스
 
-고급모바일프로그래밍 8조의 여러 게시판형 익명 커뮤니티 SNS입니다. Flutter 앱과 로컬 Firebase 개발 환경을 준비한 시작점이며, 온디바이스 AI 모델과 운영 서비스 연결은 후속 개발 범위입니다.
+고급모바일프로그래밍 8조의 여러 게시판형 익명 커뮤니티 SNS입니다. Flutter 앱과 로컬 Firebase 개발 환경을 준비한 시작점이며, Android 온디바이스 AI 교정을 연결했습니다. 운영 서비스 연결은 후속 개발 범위입니다.
 
 ## 바로 시작
 
@@ -65,9 +65,11 @@ flutter run --dart-define=USE_FIREBASE_EMULATORS=true
 | 빈 글·500자 제한, 댓글 200자 제한 | 실제 네트워크 차단·지연·재시도 시나리오 |
 | 데모 저장소와 Emulator 저장소 | 실제 테스트 Firebase 프로젝트 등록·연결 |
 | 기본 댓글·공감·신고 연결 | 동시 요청·중복 요청·여러 기기 검증과 관리자 처리 |
-| AI 서비스 계약과 적용·되돌리기 연결부 | 실제 기기 모델 연결, 토큰 제한 대응, 오프라인·성능 측정 |
+| ML Kit 온디바이스 교정, 토큰 기준 분할, 선택 적용·되돌리기, 개발용 성능 측정 화면 | 지원 실기기에서 교정 결과·토큰 수·오프라인·성능 측정 |
 
-AI 모델은 아직 연결하지 않았습니다. 기본 앱에서 교정 버튼은 비활성이고 그 사유를 표시합니다. 교정 결과를 임의로 만들어 보여주거나 작성 내용을 클라우드 AI에 전송하지 않습니다.
+AI 교정은 Android의 ML Kit GenAI Proofreading(기기 안 Gemini Nano)에 연결했습니다. [ML Kit GenAI 지원 기기 목록](https://developers.google.com/ml-kit/genai#device-support)의 Proofreading 지원 기기(예: Pixel 9·10·11 시리즈, Galaxy S25·S26 시리즈)에서만 동작하며, 그 외 기기·에뮬레이터·iOS에서는 교정 버튼이 비활성이고 그 사유를 표시합니다.
+
+입력은 256토큰 미만 구간으로 나눕니다. Prompt API도 지원하는 기기(예: Pixel 9·10·11, Galaxy S26)는 Gemini Nano 토크나이저(`countTokens`)로 토큰 수를 세어 나눕니다. Proofreading만 지원하는 기기(예: Galaxy S25)는 토크나이저가 없으므로 문장 단위로 보내고, 모델이 길이 초과(`REQUEST_TOO_LARGE`)를 알릴 때만 최대 2단계까지 반으로 나눕니다. 어느 경우에도 글자 수로 토큰 수를 대신하지 않습니다. 실패한 구간은 원문으로 유지하며, 교정 결과를 임의로 만들거나 작성 내용을 클라우드 AI에 전송하지 않습니다. 실제 지원 기기에서의 실행과 성능 측정은 아직 하지 않았습니다.
 
 화면은 초기 개발용 공통 틀이며 기존 UI 설계서의 최종 디자인을 재현한 완료본은 아닙니다. 이미지 첨부·알림·게시판 성장·관리자 화면은 구현하지 않았습니다.
 
@@ -101,7 +103,7 @@ lib/data/                 저장소 계약, 데모 구현, Firebase 구현
 lib/features/boards/      게시판 목록
 lib/features/feed/        피드
 lib/features/posts/       글쓰기, 상세, 댓글, 공감, 신고
-lib/features/ai/          온디바이스 교정 서비스 계약
+lib/features/ai/          온디바이스 교정 계약·ML Kit 연결·분할/병합·성능 측정
 test/                    단위·화면·Firestore 규칙 테스트
 integration_test/        Android 통합 테스트
 scripts/                 로컬 데이터 준비와 검증 도구
