@@ -1,33 +1,130 @@
 # 캠퍼스 소통 및 미니 피드 서비스
 
-고급모바일프로그래밍 **8조** 팀 프로젝트 저장소입니다.
+고급모바일프로그래밍 8조의 익명 커뮤니티 앱입니다. MP1은 Figma의 최신 홈, 글쓰기, 게시글 상세를 Flutter로 구현합니다.
 
-## 프로젝트 개요
+## 화면 구성
 
-주제 #2108: 미니 피드 앱 — BaaS 활용
+- **최신 홈**에서 게시글을 최신순으로 보고 게시판별로 필터링합니다.
+- **글쓰기**에서 게시판·제목·본문을 입력해 등록합니다. 피드로 돌아오면 새 글이 `방금 전`으로 맨 위에 표시됩니다.
+- **게시글 상세**에서 선택한 글의 제목과 본문을 읽고 댓글을 보거나 작성합니다.
 
-복잡한 회원가입 없이 익명으로 게시글을 작성하고, 캠퍼스 구성원들과 소통하는 모바일 애플리케이션을 개발합니다.
+Pixel 6 가상 기기에서 캡처한 화면은 [최신 홈](screenshots/01_feed.png), [글쓰기](screenshots/02_compose.png), [게시글 상세](screenshots/03_detail.png)에서 볼 수 있습니다.
 
-## 개발 예정 기술
+## 더미 데이터 구조
 
-- 앱: Flutter / Dart
-- 백엔드: Firebase
-- 인증: Firebase Authentication 익명 인증
-- 데이터베이스: Cloud Firestore
+기본 체험 모드는 가상의 게시판 4개와 글 10개로 시작합니다. 글은 게시판 ID, 익명 작성자 ID, 제목, 본문, 작성 시간을 가집니다. 글과 댓글·공감은 앱이 실행되는 동안 메모리에 저장됩니다.
 
-## 주요 구현 계획
+## 실행 절차
 
-- 피드 목록, 게시글 작성 및 상세 화면
-- 게시판 생성 및 게시판별 피드
-- 익명 인증과 게시글 실시간 동기화
-- 좋아요, 댓글 및 부적절한 콘텐츠 신고
+Android 에뮬레이터나 실기기를 연결하고 프로젝트 루트에서 실행합니다.
 
-## 진행 상태
+```powershell
+flutter pub get
+flutter run
+```
 
-현재는 저장소 초기 설정 단계입니다. 앱 소스 코드와 프로젝트 산출물은 개발 진행에 따라 추가할 예정입니다.
+Android Studio에서는 프로젝트 루트 폴더를 열고 설치한 Flutter SDK 위치를 지정합니다.
 
-## 협업
+## 개발 기준
 
-- 기능별 브랜치에서 작업한 뒤 Pull Request로 변경 내용을 공유합니다.
-- 커밋 메시지에 변경 목적을 간단히 기록합니다.
-- 비밀 키, 서비스 계정 파일, 개인 인증 정보는 저장소에 올리지 않습니다.
+| 항목 | 기준 |
+| --- | --- |
+| Flutter / Dart | Flutter 3.47.5 stable / Dart 3.13.4 |
+| 기본 실행 대상 | Android 에뮬레이터 또는 실기기 |
+| iOS | 프로젝트 틀 포함, iOS 15 이상 설정. Mac/Xcode에서 별도 빌드 검증 필요 |
+| Firebase 테스트 도구 | Node.js 24 LTS, Java 21, `npm ci` |
+| 실제 프로젝트 | 아직 연결하지 않음. 결제 설정과 원격 배포 없음 |
+
+`pubspec.lock`, `package-lock.json`, Gradle wrapper를 함께 관리합니다. SDK와 패키지 버전 변경은 PR에서 합의합니다.
+
+## 두 가지 실행 모드
+
+### 체험 모드
+
+`flutter run`의 기본값입니다. 서버와 계정 설정 없이 최신 홈에서 시작합니다. 앱을 다시 실행하면 샘플 데이터로 초기화됩니다.
+
+### Firebase Emulator 모드
+
+아래 Windows PowerShell 명령을 저장소 루트에서 사용합니다. Mac/Linux에서는 `npm.cmd`, `npx.cmd` 대신 `npm`, `npx`를 사용합니다.
+
+첫 번째 터미널:
+
+```powershell
+npm.cmd ci
+npx.cmd firebase emulators:start --only auth,firestore --project demo-team8-campus
+```
+
+두 번째 터미널:
+
+```powershell
+npm.cmd run seed
+flutter run --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+앱이 실제 Firebase 익명 인증과 Firestore SDK를 로컬 에뮬레이터에 연결합니다. Android 에뮬레이터에서 호스트 PC 주소는 `10.0.2.2`입니다. 로컬 CLI의 Authentication은 9099, Firestore는 8080, Emulator UI는 4000 포트를 사용합니다. 상세 절차는 [Firebase 개발 안내](docs/FIREBASE.md)를 참고합니다.
+
+`demo-team8-campus`는 라이브 리소스가 없는 데모 ID입니다. 기본 설정은 PC의 루프백 주소에만 바인딩하므로 다른 PC와 실기기를 연결하는 네트워크 설정은 별도 작업입니다.
+
+`npm run seed`는 샘플 게시판 3개와 고정 환영 게시글만 갱신하며 기존 사용자 작성 글을 삭제하지 않습니다. Emulator를 종료하면 데이터는 사라집니다. 수동 로컬 데이터를 보관하려면 루트의 `emulator-data/`에 내보내세요.
+
+## 개발 범위
+
+| 현재 구현 | 후속 개발 |
+| --- | --- |
+| 최신 피드·게시판 필터·글쓰기·상세 | 인기글·북마크, 이미지 첨부, 게시판 생성, 페이지네이션 |
+| 필수 입력 검증, 제목 50·본문 500·댓글 200 코드 포인트 제한 | 실제 네트워크 차단·지연·재시도 시나리오 |
+| 데모 저장소와 Emulator 저장소 | 실제 테스트 Firebase 프로젝트 등록·연결 |
+| 기본 댓글·공감·신고 연결 | 동시 요청·중복 요청·여러 기기 검증과 관리자 처리 |
+| AI 서비스 계약과 적용·되돌리기 연결부 | 실제 기기 모델 연결, 토큰 제한 대응, 오프라인·성능 측정 |
+
+기본 체험 모드의 교정 버튼은 모델을 연결할 때까지 비활성입니다.
+
+## 검증 명령
+
+```powershell
+dart format --output=none --set-exit-if-changed lib test integration_test
+flutter analyze
+flutter test
+npm.cmd run test:emulators
+flutter build apk --debug
+```
+
+규칙 테스트는 로컬 Firestore 데이터를 초기화합니다. 수동 앱 테스트와 동시에 실행하지 말고 별도 테스트 세션에서 실행합니다.
+
+Android 장치 ID를 `flutter devices`로 확인한 뒤 실행합니다.
+
+```powershell
+flutter test integration_test/demo_flow_test.dart -d emulator-5554
+# Emulator가 켜져 있고 npm run seed를 실행한 상태에서:
+flutter test integration_test/firebase_flow_test.dart -d emulator-5554 --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+[검증 결과와 한계](docs/VALIDATION.md), [26개 테스트 케이스 대응표](docs/TEST_PLAN.md)를 구분해 기록합니다. 실행하지 않은 테스트는 통과로 표시하지 않습니다.
+
+## 구조와 담당
+
+```text
+lib/core/                 공통 모델, 입력 검증, 실행 모드 선택
+lib/data/                 저장소 계약, 데모 구현, Firebase 구현
+lib/features/boards/      게시판 목록
+lib/features/feed/        피드
+lib/features/posts/       글쓰기, 상세, 댓글, 공감, 신고
+lib/features/ai/          온디바이스 교정 서비스 계약
+test/                    단위·화면·Firestore 규칙 테스트
+integration_test/        Android 통합 테스트
+scripts/                 로컬 데이터 준비와 검증 도구
+```
+
+- `redcc-c`: 앱 기반·익명 인증·게시판·피드·신고
+- `GhostRamen918`: 글쓰기·상세·댓글·좋아요
+- `Ryoon0504`: 온디바이스 AI·적용/취소·긴 입력·성능
+
+테스트·보고서·AI 활용 기록은 각자가 담당분을 작성하고 코드 통합은 공동으로 진행합니다. [팀원별 시작 안내](docs/TEAM_HANDOFF.md), [데이터 계약](docs/DATA_CONTRACT.md), [협업 방법](CONTRIBUTING.md)을 먼저 읽습니다.
+
+## 프로젝트 문서
+
+- [커뮤니티 운영 기준](GUIDELINES.md)
+- [AI 사용 및 코드 수정 기록](prompts_log.md)
+- [개발 도구 보안 점검](docs/DEPENDENCIES.md)
+
+공식 참고: [Flutter Android 설정](https://docs.flutter.dev/platform-integration/android/setup), [Flutter 통합 테스트](https://docs.flutter.dev/testing/integration-tests), [Firebase Emulator](https://firebase.google.com/docs/emulator-suite), [Firestore 규칙](https://firebase.google.com/docs/firestore/security/rules-conditions)
