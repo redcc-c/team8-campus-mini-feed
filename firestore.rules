@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function validText(text, max) {
+      return text is string
+        && ((max == 500 && text.matches('(?s)^.{1,500}$'))
+          || (max == 200 && text.matches('(?s)^.{1,200}$'))
+          || (max == 50 && text.matches('(?s)^.{1,50}$')))
+        && text.matches('(?s).*[^\\s\\p{Z}\\x{0085}\\x{FEFF}].*');
+    }
+    function postExists(postId) {
+      return exists(/databases/$(database)/documents/posts/$(postId));
+    }
+    match /boards/{boardId} {
+      allow read: if signedIn();
+      // Bootstrap boards are seeded only by the local admin script.
+      allow write: if false;
+    }
+    match /posts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['boardId', 'authorId', 'content', 'createdAt', 'title'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.boardId is string
+        && exists(/databases/$(database)/documents/boards/$(request.resource.data.boardId))
+        && validText(request.resource.data.content, 500)
+        && (!('title' in request.resource.data) || validText(request.resource.data.title, 50))
+        && request.resource.data.createdAt == request.time;
+      // Edits/deletions and cascading cleanup require a separate design.
+      allow update, delete: if false;
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && postExists(postId)
+          && request.resource.data.keys().hasOnly(['authorId', 'content', 'createdAt'])
+          && request.resource.data.authorId == request.auth.uid
+          && validText(request.resource.data.content, 200)
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+      match /likes/{uid} {
+        allow read: if signedIn();
+        allow create: if signedIn() && uid == request.auth.uid && postExists(postId)
+          && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow delete: if signedIn() && uid == request.auth.uid;
+        allow update: if false;
+      }
+      match /reports/{uid} {
+        allow create: if signedIn() && uid == request.auth.uid && postExists(postId)
+          && request.resource.data.keys().hasOnly(['reporterId', 'reason', 'createdAt', 'details'])
+          && request.resource.data.reporterId == request.auth.uid
+          && request.resource.data.reason in ['spam', 'abuse', 'privacy', 'inappropriate', 'misinformation', 'other']
+          && (!('details' in request.resource.data) ||
+            (request.resource.data.reason == 'other' && validText(request.resource.data.details, 200)))
+          && request.resource.data.createdAt == request.time;
+        // Reporter IDs and report reasons must not be exposed to other app users.
+        allow read, update, delete: if false;
+      }
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
