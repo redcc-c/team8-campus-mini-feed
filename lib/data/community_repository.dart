@@ -17,6 +17,11 @@ abstract interface class CommunityRepository {
   Future<void> reportPost({
     required String postId,
     required ReportReason reason,
+    String? details,
   });
   Future<void> dispose();
+}
+
+abstract interface class PostAvailability {
+  Stream<bool> watchPostAvailability(String postId);
 }

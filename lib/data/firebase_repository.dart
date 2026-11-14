@@ -5,7 +5,8 @@ import '../core/validation.dart';
 import 'community_repository.dart';
 
 /// Emulator adapter. Production bootstrap is a separate team task.
-class FirebaseCommunityRepository implements CommunityRepository {
+class FirebaseCommunityRepository
+    implements CommunityRepository, PostAvailability {
   FirebaseCommunityRepository({
     required FirebaseFirestore firestore,
     required this.userId,
@@ -17,6 +18,13 @@ class FirebaseCommunityRepository implements CommunityRepository {
       _db.collection('posts');
   DateTime _date(Object? value) =>
       value is Timestamp ? value.toDate() : DateTime.now();
+
+  @override
+  Stream<bool> watchPostAvailability(String postId) => _posts
+      .doc(postId)
+      .snapshots(includeMetadataChanges: true)
+      .where((snapshot) => snapshot.exists || !snapshot.metadata.isFromCache)
+      .map((snapshot) => snapshot.exists);
 
   @override
   Stream<List<Board>> watchBoards() => _db
@@ -39,7 +47,7 @@ class FirebaseCommunityRepository implements CommunityRepository {
       (boardId == null ? _posts : _posts.where('boardId', isEqualTo: boardId))
           .orderBy('createdAt', descending: true)
           .limit(50)
-          .snapshots()
+          .snapshots(includeMetadataChanges: true)
           .map(
             (snapshot) => snapshot.docs.map((doc) {
               final data = doc.data();
@@ -50,6 +58,8 @@ class FirebaseCommunityRepository implements CommunityRepository {
                 content: data['content'] as String,
                 title: data['title'] as String?,
                 createdAt: _date(data['createdAt']),
+                isNotice: data['isNotice'] == true,
+                pending: doc.metadata.hasPendingWrites,
               );
             }).toList(),
           );
@@ -138,9 +148,11 @@ class FirebaseCommunityRepository implements CommunityRepository {
   Future<void> reportPost({
     required String postId,
     required ReportReason reason,
+    String? details,
   }) => _posts.doc(postId).collection('reports').doc(userId).set({
     'reporterId': userId,
     'reason': reason.name,
+    'details': ?details,
     'createdAt': FieldValue.serverTimestamp(),
   });
   @override

@@ -97,6 +97,9 @@ test('report creation is restricted; report contents are never readable by clien
   await assertFails(getDoc(doc(user('bob'), 'posts/p1/reports/alice')));
   await assertFails(setDoc(ref, report));
   await assertFails(setDoc(doc(user('bob'), 'posts/p1/reports/bob'), { ...report, reporterId: 'bob', reason: 'invalid' }));
+  await assertFails(setDoc(doc(user('bob'), 'posts/p1/reports/bob'), { ...report, reporterId: 'bob', reason: 'other', details: '가'.repeat(201) }));
+  await assertFails(setDoc(doc(user('bob'), 'posts/p1/reports/bob'), { ...report, reporterId: 'bob', reason: 'privacy', details: '선택 사유 외 입력' }));
+  await assertSucceeds(setDoc(doc(user('bob'), 'posts/p1/reports/bob'), { ...report, reporterId: 'bob', reason: 'other', details: '가'.repeat(200) }));
 });
 test('unlisted collections are denied', async () => {
   await assertFails(setDoc(doc(user(), 'private/config'), { role: 'admin' }));

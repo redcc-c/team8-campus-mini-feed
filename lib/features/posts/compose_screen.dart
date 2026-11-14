@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/bootstrap.dart';
 import '../../core/models.dart';
 import '../../core/validation.dart';
+import '../../data/demo_repository.dart';
 import '../../widgets/async_content.dart';
 import '../../widgets/campus_style.dart';
-import '../ai/correction_service.dart';
+import '../ai/correction_sheet.dart';
 
 class ComposeScreen extends StatefulWidget {
   const ComposeScreen({
@@ -27,9 +30,12 @@ class _ComposeScreenState extends State<ComposeScreen> {
   final _content = TextEditingController();
   late String? _selectedBoardId = widget.board?.id;
   bool _saving = false;
+  bool _saveFailed = false;
   bool _checking = false;
+  bool _pickingPhoto = false;
+  String? _photoError;
+  final _photos = <Uint8List>[];
   bool _askingToDiscard = false;
-  CorrectionResult? _result;
   String? _undo;
 
   @override
@@ -40,24 +46,76 @@ class _ComposeScreenState extends State<ComposeScreen> {
   }
 
   Future<void> _publish() async {
-    if (_saving || _checking || !_form.currentState!.validate()) return;
+    if (_saving ||
+        _checking ||
+        _pickingPhoto ||
+        !_form.currentState!.validate()) {
+      return;
+    }
     FocusScope.of(context).unfocus();
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveFailed = false;
+    });
     try {
-      final post = await widget.services.repository
-          .createPost(
-            boardId: _selectedBoardId!,
-            title: _title.text,
-            content: _content.text,
-          )
-          .timeout(const Duration(seconds: 15));
+      final repository = widget.services.repository;
+      final request =
+          repository is DemoCommunityRepository && _photos.isNotEmpty
+          ? repository.createPostWithPhotos(
+              boardId: _selectedBoardId!,
+              title: _title.text,
+              content: _content.text,
+              photos: _photos,
+            )
+          : repository.createPost(
+              boardId: _selectedBoardId!,
+              title: _title.text,
+              content: _content.text,
+            );
+      final post = await request.timeout(const Duration(seconds: 15));
       if (mounted) Navigator.of(context).pop(post);
     } catch (_) {
-      if (mounted) {
-        showNotice(context, '저장하지 못했습니다. 작성한 내용은 유지됩니다. 연결을 확인하고 다시 시도해 주세요.');
-      }
+      if (mounted) setState(() => _saveFailed = true);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _pickPhotos() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _pickingPhoto = true;
+      _photoError = null;
+    });
+    try {
+      final files = await ImagePicker().pickMultiImage(
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+        requestFullMetadata: false,
+      );
+      final remaining = 5 - _photos.length;
+      final selected = await Future.wait(
+        files.take(remaining).map((file) => file.readAsBytes()),
+      );
+      if (mounted) {
+        setState(() {
+          _photos.addAll(selected);
+          if (files.length > remaining) _photoError = '사진은 최대 5장까지 첨부할 수 있어요.';
+        });
+      }
+    } on PlatformException catch (error) {
+      if (mounted) {
+        setState(
+          () => _photoError = error.code.contains('access')
+              ? '사진 접근이 제한되어 있어요. 사진 없이 글을 등록할 수 있어요.'
+              : '사진을 불러오지 못했어요. 다시 선택해 주세요.',
+        );
+      }
+    } catch (_) {
+      if (mounted) setState(() => _photoError = '사진을 불러오지 못했어요. 다시 선택해 주세요.');
+    } finally {
+      if (mounted) setState(() => _pickingPhoto = false);
     }
   }
 
@@ -68,71 +126,55 @@ class _ComposeScreenState extends State<ComposeScreen> {
       return;
     }
     final original = _content.text;
+    FocusScope.of(context).unfocus();
     setState(() => _checking = true);
     try {
-      final result = await widget.services.correction
-          .check(original)
-          .timeout(const Duration(seconds: 30));
-      if (!mounted) return;
-      if (_content.text != original || result.originalText != original) {
-        showNotice(context, '글이 변경됐습니다. 다시 검사해 주세요.');
-        return;
-      }
-      setState(() => _result = result);
-      if (result.suggestions.isEmpty) showNotice(context, '수정 제안이 없습니다.');
-    } catch (_) {
-      if (mounted) showNotice(context, 'AI 교정을 사용할 수 없습니다. 원문은 유지됩니다.');
-    } finally {
-      if (mounted) setState(() => _checking = false);
-    }
-  }
-
-  void _apply(CorrectionSuggestion suggestion) {
-    final result = _result;
-    if (result == null || _content.text != result.originalText) return;
-    try {
-      final changed = result.apply(suggestion);
+      final changed = await showCorrectionSheet(
+        context,
+        widget.services.correction,
+        original,
+      );
+      if (!mounted || changed == null || _content.text != original) return;
       if (validateContent(changed) != null) {
-        showNotice(context, '적용 결과가 글자 수 제한을 벗어납니다. 원문을 유지합니다.');
+        showNotice(context, '교정 결과가 입력 제한을 벗어났어요. 원문을 유지했어요.');
         return;
       }
       setState(() {
-        _undo = _content.text;
+        _undo = original;
         _content.text = changed;
-        _result = null;
       });
-    } catch (_) {
-      showNotice(context, '제안을 적용하지 못했습니다. 원문을 유지합니다.');
+    } finally {
+      if (mounted) setState(() => _checking = false);
     }
   }
 
   Future<void> _discardDraft(bool didPop) async {
     if (didPop || _saving || _askingToDiscard) return;
     _askingToDiscard = true;
-    final leave = await showModalBottomSheet<bool>(
-      context: context,
-      useSafeArea: true,
-      builder: (context) => SafeArea(
-        top: false,
-        minimum: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('작성 중인 글이 있어요', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            const Text('나가면 작성한 내용이 사라져요.'),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('나가기'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('계속 쓰기'),
-            ),
-          ],
-        ),
+    final leave = await showCampusSheet<bool>(
+      context,
+      (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 8,
+        children: [
+          const Text(
+            '작성 중인 글이 있어요',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const Text(
+            '나가면 작성한 내용이 사라져요.',
+            style: TextStyle(fontSize: 15, color: CampusColors.secondaryInk),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('나가기'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('계속 쓰기'),
+          ),
+        ],
       ),
     );
     _askingToDiscard = false;
@@ -141,7 +183,11 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   @override
   Widget build(BuildContext context) => PopScope<FeedPost>(
-    canPop: !_saving && _title.text.isEmpty && _content.text.isEmpty,
+    canPop:
+        !_saving &&
+        _title.text.isEmpty &&
+        _content.text.isEmpty &&
+        _photos.isEmpty,
     onPopInvokedWithResult: (didPop, _) => _discardDraft(didPop),
     child: Scaffold(
       appBar: AppBar(
@@ -157,24 +203,46 @@ class _ComposeScreenState extends State<ComposeScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   _fieldLabel('게시판'),
-                  DropdownButtonFormField<String>(
-                    key: const ValueKey('post-board'),
+                  FormField<String>(
                     initialValue: _selectedBoardId,
-                    isExpanded: true,
-                    icon: const CampusIcon('chevron-down'),
-                    decoration: const InputDecoration(hintText: '게시판을 선택해 주세요'),
-                    items: [
-                      for (final board in widget.boards)
-                        DropdownMenuItem(
-                          value: board.id,
-                          child: Text(board.name),
-                        ),
-                    ],
-                    onChanged: _saving
-                        ? null
-                        : (id) => setState(() => _selectedBoardId = id),
                     validator: (value) =>
                         value == null ? '게시판을 선택해 주세요.' : null,
+                    builder: (field) {
+                      final board = widget.boards
+                          .where((board) => board.id == field.value)
+                          .firstOrNull;
+                      return InkWell(
+                        key: const ValueKey('post-board'),
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: _saving
+                            ? null
+                            : () async {
+                                FocusScope.of(context).unfocus();
+                                final selected = await _pickBoard();
+                                if (!mounted || selected == null) return;
+                                field.didChange(selected.id);
+                                if (field.hasError) field.validate();
+                                setState(() => _selectedBoardId = selected.id);
+                              },
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            errorText: field.errorText,
+                          ),
+                          child: Row(
+                            spacing: 8,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  board?.name ?? '게시판을 선택해 주세요',
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ),
+                              const CampusIcon('chevron-down'),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   _fieldLabel(
@@ -207,37 +275,37 @@ class _ComposeScreenState extends State<ComposeScreen> {
                     maxLines: 12,
                     decoration: const InputDecoration(hintText: '내용을 입력해 주세요'),
                     validator: (value) => validateContent(value ?? ''),
-                    onChanged: (_) => setState(() {
-                      _result = null;
-                      _undo = null;
-                    }),
+                    onChanged: (_) => setState(() => _undo = null),
                   ),
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: OutlinedButton(
-                      key: const ValueKey('ai-check'),
-                      onPressed:
-                          widget.services.correction.isAvailable &&
-                              !_checking &&
-                              !_saving
-                          ? _check
-                          : null,
-                      child: Text(_checking ? '검사 중…' : '교정하기'),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 144),
+                      child: OutlinedButton(
+                        key: ValueKey(
+                          _undo == null ? 'ai-check' : 'undo-correction',
+                        ),
+                        onPressed: _saving || _checking
+                            ? null
+                            : _undo != null
+                            ? () => setState(() {
+                                _content.text = _undo!;
+                                _undo = null;
+                              })
+                            : widget.services.correction.isAvailable &&
+                                  _content.text.trim().isNotEmpty
+                            ? _check
+                            : null,
+                        child: Text(_undo == null ? '교정하기' : '교정 되돌리기'),
+                      ),
                     ),
                   ),
-                  if (_undo != null)
-                    TextButton(
-                      key: const ValueKey('undo-correction'),
-                      onPressed: _saving || _checking
-                          ? null
-                          : () => setState(() {
-                              _content.text = _undo!;
-                              _undo = null;
-                              _result = null;
-                            }),
-                      child: const Text('교정 되돌리기'),
-                    ),
+                  if (widget.services.repository
+                      is DemoCommunityRepository) ...[
+                    const SizedBox(height: 8),
+                    _photoPicker(),
+                  ],
                   const SizedBox(height: 8),
                   Text(
                     '${anonymousName(widget.services.repository.userId)} 이름으로 게시돼요',
@@ -246,22 +314,32 @@ class _ComposeScreenState extends State<ComposeScreen> {
                       color: CampusColors.secondaryInk,
                     ),
                   ),
-                  if (_result case final result?)
-                    for (final suggestion in result.suggestions)
-                      Card(
-                        child: ListTile(
-                          title: Text(suggestion.replacement),
-                          subtitle: Text(suggestion.reason),
-                          trailing: TextButton(
-                            onPressed: () => _apply(suggestion),
-                            child: const Text('적용'),
-                          ),
-                        ),
-                      ),
                 ],
               ),
             ),
           ),
+          if (_saveFailed)
+            const ColoredBox(
+              color: CampusColors.errorSoft,
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  spacing: 12,
+                  children: [
+                    CampusIcon('write-error', size: 24),
+                    Expanded(
+                      child: Text(
+                        '글을 등록하지 못했어요. 작성한 내용은 그대로 남아 있어요.',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: CampusColors.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ColoredBox(
             color: CampusColors.surface,
             child: SafeArea(
@@ -271,14 +349,114 @@ class _ComposeScreenState extends State<ComposeScreen> {
                 width: double.infinity,
                 child: FilledButton(
                   key: const ValueKey('publish'),
-                  onPressed: _saving || _checking ? null : _publish,
-                  child: Text(_saving ? '등록 중…' : '등록하기'),
+                  onPressed: _saving || _checking || _pickingPhoto
+                      ? null
+                      : _publish,
+                  child: Text(
+                    _saving ? '등록 중…' : (_saveFailed ? '다시 등록하기' : '등록하기'),
+                  ),
                 ),
               ),
             ),
           ),
         ],
       ),
+    ),
+  );
+
+  Widget _photoPicker() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _fieldLabel('사진', '${_photos.length} / 5'),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          SizedBox.square(
+            dimension: 72,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                backgroundColor: CampusColors.muted,
+              ),
+              onPressed: _saving || _pickingPhoto || _photos.length == 5
+                  ? null
+                  : _pickPhotos,
+              child: _pickingPhoto
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Tooltip(
+                      message: '사진 첨부',
+                      child: CampusIcon('camera'),
+                    ),
+            ),
+          ),
+          for (final (index, photo) in _photos.indexed)
+            SizedBox.square(
+              dimension: 72,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(photo, fit: BoxFit.cover),
+                  ),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: IconButton(
+                      tooltip: '사진 삭제',
+                      onPressed: _saving || _pickingPhoto
+                          ? null
+                          : () => setState(() {
+                              _photos.removeAt(index);
+                              _photoError = null;
+                            }),
+                      icon: const CampusIcon('remove-photo'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+      if (_photoError case final message?)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            message,
+            style: const TextStyle(color: CampusColors.error),
+          ),
+        ),
+    ],
+  );
+
+  Future<Board?> _pickBoard() => showCampusSheet<Board>(
+    context,
+    (context) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 8,
+      children: [
+        const Text(
+          '어느 게시판에 올릴까요?',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+        const Text(
+          '게시할 곳을 하나 선택해 주세요.',
+          style: TextStyle(fontSize: 14, color: CampusColors.secondaryInk),
+        ),
+        for (final board in widget.boards)
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(board),
+            child: Text(board.name),
+          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('취소'),
+        ),
+      ],
     ),
   );
 

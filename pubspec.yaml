@@ -38,6 +38,7 @@ dependencies:
   firebase_auth: ^7.0.1
   cloud_firestore: ^7.1.0
   flutter_svg: ^2.3.2
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:
@@ -64,6 +65,11 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+    - assets/images/
+  fonts:
+    - family: Noto Sans KR
+      fonts:
+        - asset: assets/fonts/NotoSansKR.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

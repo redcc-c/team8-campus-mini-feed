@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'core/bootstrap.dart';
+import 'widgets/campus_style.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,27 +26,25 @@ class _BootstrapAppState extends State<BootstrapApp> {
         debugShowCheckedModeBanner: false,
         theme: campusTheme,
         home: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: snapshot.hasError
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.cloud_off_outlined, size: 48),
-                        const SizedBox(height: 16),
-                        const Text('앱을 시작하지 못했습니다.'),
-                        const Text('로컬 테스트 서버 연결과 실행 설정을 확인해 주세요.'),
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: () =>
-                              setState(() => _services = bootstrap()),
-                          child: const Text('다시 시도'),
-                        ),
-                      ],
-                    )
-                  : const CircularProgressIndicator(),
-            ),
+          body: SafeArea(
+            child:
+                snapshot.connectionState == ConnectionState.done &&
+                    snapshot.hasError
+                ? CampusStatus(
+                    icon: 'shield',
+                    iconSize: 20,
+                    title: '연결을 확인해 주세요',
+                    message: '인터넷 연결을 확인한 뒤 다시 시도해 주세요.',
+                    actionLabel: '다시 시도',
+                    actionWidth: 216,
+                    onAction: () => setState(() => _services = bootstrap()),
+                  )
+                : const CampusStatus(
+                    icon: 'shield',
+                    iconSize: 20,
+                    title: '앱을 준비하고 있어요',
+                    message: '익명 세션을 연결하고 있어요.',
+                  ),
           ),
         ),
       );

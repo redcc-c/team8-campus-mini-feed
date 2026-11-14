@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 class Board {
   const Board({
     required this.id,
@@ -19,6 +21,10 @@ class FeedPost {
     required this.content,
     required this.createdAt,
     this.title,
+    this.isNotice = false,
+    this.pending = false,
+    this.photoAsset,
+    this.photos = const [],
   });
   final String id;
   final String boardId;
@@ -26,6 +32,10 @@ class FeedPost {
   final String content;
   final String? title;
   final DateTime createdAt;
+  final bool isNotice;
+  final bool pending;
+  final String? photoAsset;
+  final List<Uint8List> photos;
 }
 
 class FeedComment {
@@ -44,9 +54,11 @@ class FeedComment {
 }
 
 enum ReportReason {
+  abuse('욕설·비하'),
   spam('스팸·광고'),
-  abuse('욕설·비방'),
-  inappropriate('부적절한 콘텐츠'),
+  privacy('개인정보 노출'),
+  inappropriate('음란·불쾌한 내용'),
+  misinformation('허위 정보'),
   other('기타');
 
   const ReportReason(this.label);

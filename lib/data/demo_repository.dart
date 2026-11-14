@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../core/models.dart';
 import '../core/validation.dart';
@@ -9,7 +10,7 @@ class DemoCommunityRepository implements CommunityRepository {
     if (seed) _seed();
   }
 
-  static const boards = [
+  final _boards = <Board>[
     Board(
       id: 'free',
       name: '캠퍼스 일상',
@@ -32,14 +33,14 @@ class DemoCommunityRepository implements CommunityRepository {
       id: 'hobby',
       name: '동아리 소식',
       shortName: '동아리',
-      description: '새로운 모임과 활동 소식이에요',
+      description: '새로운 모임과 활동 소식을 만나보세요',
     ),
   ];
   final _changes = StreamController<void>.broadcast();
   final _posts = <FeedPost>[];
   final _comments = <FeedComment>[];
   final _likes = <String, Set<String>>{};
-  final _reported = <String>{};
+  final _reports = <String, (ReportReason, String?)>{};
   int _sequence = 0;
   @override
   String get userId => 'demo-local-f8c2';
@@ -93,8 +94,8 @@ class DemoCommunityRepository implements CommunityRepository {
         'dev',
         'demo-user-7b3d',
         120,
-        'Flutter 위젯 공부 기록',
-        '목록에서 상세로 이동하는 작은 예제를 만들어 봤어요.',
+        'Flutter 스터디 같이 하실 분?',
+        '일주일에 한 번 모여 앱을 만들어 보려고 해요. 함께 시작해요.',
       ),
       (
         'reading',
@@ -138,6 +139,7 @@ class DemoCommunityRepository implements CommunityRepository {
           title: title,
           content: content,
           createdAt: now.subtract(Duration(minutes: minutes)),
+          photoAsset: id == 'welcome' ? 'assets/images/laptop.png' : null,
         ),
       );
     }
@@ -161,6 +163,7 @@ class DemoCommunityRepository implements CommunityRepository {
       ('welcome', 42),
       ('library', 26),
       ('clubs', 19),
+      ('flutter', 19),
     ]) {
       _likes[id] = {for (var i = 0; i < count; i++) 'sample-like-$i'};
     }
@@ -183,7 +186,30 @@ class DemoCommunityRepository implements CommunityRepository {
   }
 
   @override
-  Stream<List<Board>> watchBoards() => Stream.value(boards);
+  Stream<List<Board>> watchBoards() => _watch(() => List.unmodifiable(_boards));
+
+  Board createBoard({
+    required String name,
+    required String category,
+    required String description,
+  }) {
+    final validName = requireContent(name, maxLength: 20);
+    final validCategory = requireContent(category, maxLength: 20);
+    final validDescription = requireContent(description, maxLength: 100);
+    if (_boards.any((board) => board.name == validName)) {
+      throw StateError('이미 같은 이름의 게시판이 있어요.');
+    }
+    final board = Board(
+      id: 'local-board-${++_sequence}',
+      name: validName,
+      description: validDescription,
+      shortName: validCategory,
+    );
+    _boards.add(board);
+    _changes.add(null);
+    return board;
+  }
+
   @override
   Stream<List<FeedPost>> watchPosts([String? boardId]) => _watch(() {
     final posts =
@@ -208,8 +234,27 @@ class DemoCommunityRepository implements CommunityRepository {
     required String boardId,
     required String content,
     String? title,
-  }) async {
-    if (!boards.any((board) => board.id == boardId)) {
+  }) async => _createPost(boardId: boardId, content: content, title: title);
+
+  Future<FeedPost> createPostWithPhotos({
+    required String boardId,
+    required String content,
+    required String title,
+    required List<Uint8List> photos,
+  }) async => _createPost(
+    boardId: boardId,
+    content: content,
+    title: title,
+    photos: photos,
+  );
+
+  FeedPost _createPost({
+    required String boardId,
+    required String content,
+    String? title,
+    List<Uint8List> photos = const [],
+  }) {
+    if (!_boards.any((board) => board.id == boardId)) {
       throw ArgumentError('게시판을 선택해 주세요.');
     }
     final post = FeedPost(
@@ -221,6 +266,7 @@ class DemoCommunityRepository implements CommunityRepository {
           ? null
           : requireContent(title, maxLength: maxTitleLength),
       createdAt: DateTime.now(),
+      photos: List.unmodifiable(photos),
     );
     _posts.insert(0, post);
     _changes.add(null);
@@ -257,9 +303,17 @@ class DemoCommunityRepository implements CommunityRepository {
   Future<void> reportPost({
     required String postId,
     required ReportReason reason,
+    String? details,
   }) async {
     _requirePost(postId);
-    if (!_reported.add(postId)) throw StateError('이미 신고한 게시글입니다.');
+    if (_reports.containsKey(postId)) throw StateError('이미 신고한 게시글입니다.');
+    final note = details == null
+        ? null
+        : requireContent(details, maxLength: maxCommentLength);
+    if (note != null && reason != ReportReason.other) {
+      throw ArgumentError('기타 사유에만 자세한 내용을 추가할 수 있어요.');
+    }
+    _reports[postId] = (reason, note);
   }
 
   @override

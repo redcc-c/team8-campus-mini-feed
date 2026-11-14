@@ -4,6 +4,7 @@ import '../../core/models.dart';
 import '../../data/community_repository.dart';
 import '../../widgets/async_content.dart';
 import '../../widgets/campus_style.dart';
+import '../posts/post_photo.dart';
 
 class PostCard extends StatefulWidget {
   const PostCard({
@@ -11,6 +12,10 @@ class PostCard extends StatefulWidget {
     required this.post,
     required this.repository,
     required this.onOpen,
+    required this.onMenu,
+    required this.onBookmark,
+    required this.bookmarked,
+    this.showPhoto = false,
     super.key,
   });
 
@@ -18,6 +23,10 @@ class PostCard extends StatefulWidget {
   final FeedPost post;
   final CommunityRepository repository;
   final VoidCallback onOpen;
+  final VoidCallback onMenu;
+  final VoidCallback onBookmark;
+  final bool bookmarked;
+  final bool showPhoto;
 
   @override
   State<PostCard> createState() => _PostCardState();
@@ -44,7 +53,7 @@ class _PostCardState extends State<PostCard> {
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
-    const radius = BorderRadius.all(Radius.circular(14));
+    const radius = BorderRadius.all(Radius.circular(12));
     return Card(
       color: CampusColors.surface,
       surfaceTintColor: Colors.transparent,
@@ -58,7 +67,7 @@ class _PostCardState extends State<PostCard> {
         borderRadius: radius,
         onTap: widget.onOpen,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -113,46 +122,71 @@ class _PostCardState extends State<PostCard> {
                   Expanded(
                     flex: 2,
                     child: Text(
-                      relativeTime(post.createdAt),
+                      post.pending ? '전송 중' : relativeTime(post.createdAt),
                       textAlign: TextAlign.end,
                       style: _metaStyle,
                     ),
                   ),
-                  PopupMenuButton<void>(
+                  IconButton(
                     tooltip: '게시글 메뉴',
-                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 34,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onMenu,
                     icon: const CampusIcon('more', size: 24),
-                    itemBuilder: (_) => [
-                      PopupMenuItem<void>(
-                        onTap: widget.onOpen,
-                        child: const Text('상세 보기'),
-                      ),
-                    ],
                   ),
                 ],
               ),
-              if (post.title case final title?) ...[
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.5,
-                    fontWeight: FontWeight.w600,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 8,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 4,
+                      children: [
+                        if (post.title case final title?)
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              height: 1.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        Text(
+                          post.content
+                              .split('\n\n')
+                              .first
+                              .replaceAll(RegExp(r'\s+'), ' '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            height: 1.5,
+                            color: CampusColors.secondaryInk,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-              ],
-              Text(
-                post.content.replaceAll(RegExp(r'\s+'), ' '),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.5,
-                  color: CampusColors.secondaryInk,
-                ),
+                  if (postPhotoCount(post, showSample: widget.showPhoto) > 0)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: postPhoto(
+                        post,
+                        0,
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 10),
               Row(
@@ -163,13 +197,7 @@ class _PostCardState extends State<PostCard> {
                       final likes = snapshot.data ?? const <String>{};
                       final liked = likes.contains(widget.repository.userId);
                       return _action(
-                        icon: liked
-                            ? const Icon(
-                                Icons.favorite,
-                                size: 20,
-                                color: CampusColors.primary,
-                              )
-                            : const CampusIcon('heart'),
+                        icon: CampusIcon(liked ? 'heart-selected' : 'heart'),
                         count: likes.length,
                         label: liked ? '공감 취소' : '공감',
                         onTap: _liking || !snapshot.hasData
@@ -189,10 +217,9 @@ class _PostCardState extends State<PostCard> {
                     ),
                   ),
                   const Spacer(),
-                  const IconButton(
-                    tooltip: '북마크 · 후속 기능',
-                    onPressed: null,
-                    icon: CampusIcon('bookmark'),
+                  CampusBookmarkButton(
+                    selected: widget.bookmarked,
+                    onPressed: widget.onBookmark,
                   ),
                 ],
               ),

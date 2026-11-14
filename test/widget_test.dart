@@ -119,7 +119,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('실패해도 유지할 원문'), findsOneWidget);
     expect(find.text('연결이 불안정해요'), findsOneWidget);
-    expect(find.textContaining('작성한 내용은 유지됩니다'), findsOneWidget);
+    expect(find.textContaining('작성한 내용은 그대로 남아 있어요'), findsOneWidget);
+    expect(find.text('다시 등록하기'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const ValueKey('publish')))
@@ -170,6 +171,56 @@ void main() {
     expect(tester.getBottomRight(publish).dy, lessThanOrEqualTo(500));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'a post stays bookmarked across tabs and opens the report sheet',
+    (tester) async {
+      final repository = DemoCommunityRepository();
+      addTearDown(repository.dispose);
+      await tester.pumpWidget(
+        CampusApp(
+          services: AppServices(
+            repository: repository,
+            correction: const UnavailableCorrectionService(),
+            isDemo: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final firstPost = find.byKey(const ValueKey('post-welcome'));
+      await tester.tap(
+        find.descendant(of: firstPost, matching: find.byTooltip('북마크 저장')),
+      );
+      await tester.tap(find.text('북마크'));
+      await tester.pumpAndSettle();
+      expect(find.text('저장한 글 1개'), findsOneWidget);
+      await tester.tap(find.text('수업용 노트북, 어떤 모델 쓰세요?'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('report')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('신고하기'));
+      await tester.pumpAndSettle();
+      expect(find.text('이 글을 신고할까요?'), findsOneWidget);
+      final send = find.widgetWithText(FilledButton, '신고하기');
+      expect(tester.widget<FilledButton>(send).onPressed, isNull);
+      await tester.ensureVisible(find.text('기타'));
+      await tester.tap(find.text('기타'));
+      await tester.pumpAndSettle();
+      final details = find.byType(TextField).last;
+      await tester.ensureVisible(details);
+      await tester.enterText(details, '테스트 신고 내용');
+      await tester.ensureVisible(send);
+      await tester.tap(send);
+      await tester.pumpAndSettle();
+      expect(find.text('신고가 접수됐어요'), findsOneWidget);
+      await tester.tap(find.text('확인'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('북마크 해제'));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('저장한 글이 없어요'), findsOneWidget);
+    },
+  );
 }
 
 class _FailingRepository extends DemoCommunityRepository {

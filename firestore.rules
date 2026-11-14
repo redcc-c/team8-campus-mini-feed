@@ -49,9 +49,11 @@ service cloud.firestore {
       }
       match /reports/{uid} {
         allow create: if signedIn() && uid == request.auth.uid && postExists(postId)
-          && request.resource.data.keys().hasOnly(['reporterId', 'reason', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['reporterId', 'reason', 'createdAt', 'details'])
           && request.resource.data.reporterId == request.auth.uid
-          && request.resource.data.reason in ['spam', 'abuse', 'inappropriate', 'other']
+          && request.resource.data.reason in ['spam', 'abuse', 'privacy', 'inappropriate', 'misinformation', 'other']
+          && (!('details' in request.resource.data) ||
+            (request.resource.data.reason == 'other' && validText(request.resource.data.details, 200)))
           && request.resource.data.createdAt == request.time;
         // Reporter IDs and report reasons must not be exposed to other app users.
         allow read, update, delete: if false;

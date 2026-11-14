@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'core/bootstrap.dart';
-import 'features/boards/board_screen.dart';
 import 'features/feed/feed_screen.dart';
 import 'widgets/campus_style.dart';
 
@@ -12,11 +11,13 @@ final _inputBorder = OutlineInputBorder(
 
 final campusTheme = ThemeData(
   useMaterial3: true,
+  fontFamily: 'Noto Sans KR',
   colorScheme: ColorScheme.fromSeed(seedColor: CampusColors.primary).copyWith(
     primary: CampusColors.primary,
     onPrimary: Colors.white,
     surface: CampusColors.surface,
     onSurface: CampusColors.ink,
+    error: CampusColors.error,
   ),
   scaffoldBackgroundColor: CampusColors.background,
   appBarTheme: const AppBarTheme(
@@ -25,9 +26,13 @@ final campusTheme = ThemeData(
     surfaceTintColor: Colors.transparent,
     scrolledUnderElevation: 0,
     centerTitle: false,
+    leadingWidth: 64,
+    titleSpacing: 8,
     titleTextStyle: TextStyle(
+      fontFamily: 'Noto Sans KR',
       color: CampusColors.ink,
       fontSize: 22,
+      height: 30 / 22,
       fontWeight: FontWeight.w700,
     ),
   ),
@@ -45,6 +50,9 @@ final campusTheme = ThemeData(
   filledButtonTheme: FilledButtonThemeData(
     style: FilledButton.styleFrom(
       minimumSize: const Size(0, 52),
+      disabledBackgroundColor: CampusColors.muted,
+      disabledForegroundColor: CampusColors.disabledInk,
+      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
   ),
@@ -53,7 +61,9 @@ final campusTheme = ThemeData(
       minimumSize: const Size(0, 52),
       backgroundColor: CampusColors.surface,
       foregroundColor: CampusColors.ink,
+      disabledForegroundColor: CampusColors.disabledInk,
       side: const BorderSide(color: CampusColors.borderStrong, width: 1.5),
+      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
   ),
@@ -67,8 +77,6 @@ class CampusApp extends StatelessWidget {
     title: '캠퍼스 미니 피드',
     debugShowCheckedModeBanner: false,
     theme: campusTheme,
-    home: services.isDemo
-        ? FeedScreen(services: services)
-        : BoardScreen(services: services),
+    home: FeedScreen(services: services),
   );
 }
