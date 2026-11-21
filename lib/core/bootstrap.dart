@@ -7,6 +7,7 @@ import '../data/community_repository.dart';
 import '../data/demo_repository.dart';
 import '../data/firebase_repository.dart';
 import '../features/ai/correction_service.dart';
+import '../features/ai/on_device_correction_service.dart';
 
 const emulatorProjectId = 'demo-team8-campus';
 
@@ -26,7 +27,7 @@ Future<AppServices> bootstrap() async {
   if (!useEmulators) {
     return AppServices(
       repository: DemoCommunityRepository(),
-      correction: const UnavailableCorrectionService(),
+      correction: await OnDeviceCorrectionService.create(),
       isDemo: true,
     );
   }
@@ -62,7 +63,7 @@ Future<AppServices> bootstrap() async {
       firestore: db,
       userId: credential.user!.uid,
     ),
-    correction: const UnavailableCorrectionService(),
+    correction: await OnDeviceCorrectionService.create(),
     isDemo: false,
   );
 }
