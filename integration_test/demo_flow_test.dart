@@ -1,7 +1,6 @@
 import 'package:campus_mini_feed/app.dart';
 import 'package:campus_mini_feed/core/bootstrap.dart';
 import 'package:campus_mini_feed/data/demo_repository.dart';
-import 'package:campus_mini_feed/features/ai/correction_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -11,17 +10,10 @@ void main() {
   testWidgets('Android demo can publish a post and open its details', (
     tester,
   ) async {
-    final repo = DemoCommunityRepository();
+    final services = await bootstrap();
+    final repo = services.repository as DemoCommunityRepository;
     addTearDown(repo.dispose);
-    await tester.pumpWidget(
-      CampusApp(
-        services: AppServices(
-          repository: repo,
-          correction: const UnavailableCorrectionService(),
-          isDemo: true,
-        ),
-      ),
-    );
+    await tester.pumpWidget(CampusApp(services: services));
     await tester.pumpAndSettle();
     expect((await repo.watchPosts().first), hasLength(10));
     await tester.tap(find.byKey(const ValueKey('compose')));

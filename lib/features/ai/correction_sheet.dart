@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/campus_style.dart';
+import 'correction_engine.dart';
 import 'correction_service.dart';
 
 Future<String?> showCorrectionSheet(
@@ -9,110 +10,152 @@ Future<String?> showCorrectionSheet(
   String original,
 ) => showCampusSheet<String>(
   context,
-  (_) => _CorrectionSheet(service: service, original: original),
+  (_) => _CorrectionRequest(service: service, original: original),
 );
 
-class _CorrectionSheet extends StatefulWidget {
-  const _CorrectionSheet({required this.service, required this.original});
+Future<List<CorrectionSuggestion>?> showCorrectionSuggestions(
+  BuildContext context,
+  CorrectionResult result,
+) => showCampusSheet<List<CorrectionSuggestion>>(
+  context,
+  (_) => _CorrectionSheet(result: result),
+);
 
+class _CorrectionRequest extends StatefulWidget {
+  const _CorrectionRequest({required this.service, required this.original});
   final CorrectionService service;
   final String original;
+
+  @override
+  State<_CorrectionRequest> createState() => _CorrectionRequestState();
+}
+
+class _CorrectionRequestState extends State<_CorrectionRequest> {
+  late final _result = _check();
+
+  Future<CorrectionResult> _check() async {
+    final result = await widget.service.check(
+      widget.original,
+      isCancelled: () => !mounted,
+    );
+    if (result.originalText != widget.original || result.allFailed) {
+      throw StateError('교정을 완료하지 못했습니다.');
+    }
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<CorrectionResult>(
+    future: _result,
+    builder: (context, snapshot) {
+      if (snapshot.hasData) {
+        return _CorrectionSheet(result: snapshot.requireData, returnText: true);
+      }
+      final failed = snapshot.hasError;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 12,
+        children: [
+          Text(failed ? '교정을 완료하지 못했어요' : '문장을 확인하고 있어요'),
+          Text(
+            failed
+                ? '원문은 그대로예요. 계속 작성할 수 있어요.'
+                : '처음에는 모델을 내려받느라 몇 분 걸릴 수 있습니다.',
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(failed ? '계속 작성하기' : '중지'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _CorrectionSheet extends StatefulWidget {
+  const _CorrectionSheet({required this.result, this.returnText = false});
+
+  final CorrectionResult result;
+  final bool returnText;
 
   @override
   State<_CorrectionSheet> createState() => _CorrectionSheetState();
 }
 
 class _CorrectionSheetState extends State<_CorrectionSheet> {
-  late final _candidate = _check();
+  late final _items = widget.result.suggestions;
+  late final Set<CorrectionSuggestion> _selected = {..._items};
 
-  Future<String> _check() async {
-    final result = await widget.service
-        .check(widget.original)
-        .timeout(const Duration(seconds: 30));
-    if (result.originalText != widget.original) {
-      throw StateError('교정 요청과 원문이 일치하지 않아요.');
+  void _toggle(CorrectionSuggestion item) => setState(() {
+    if (!_selected.remove(item)) _selected.add(item);
+  });
+
+  void _apply() {
+    final selected = [
+      for (final item in _items)
+        if (_selected.contains(item)) item,
+    ];
+    if (widget.returnText) {
+      Navigator.of(context).pop(widget.result.applyAll(selected));
+    } else {
+      Navigator.of(context).pop(selected);
     }
-    var corrected = result.originalText;
-    var previousStart = corrected.length;
-    final changes = result.suggestions.toList()
-      ..sort((a, b) => b.start.compareTo(a.start));
-    for (final change in changes) {
-      if (change.start < 0 ||
-          change.end < change.start ||
-          change.end > previousStart) {
-        throw StateError('수정 범위가 겹치거나 올바르지 않아요.');
-      }
-      corrected = corrected.replaceRange(
-        change.start,
-        change.end,
-        change.replacement,
-      );
-      previousStart = change.start;
-    }
-    return corrected;
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<String>(
-    future: _candidate,
-    builder: (context, snapshot) {
-      if (snapshot.connectionState != ConnectionState.done) {
-        return _content('문장을 확인하고 있어요', '기기에서 맞춤법과 띄어쓰기를 확인하고 있어요.');
-      }
-      if (snapshot.hasError) {
-        return _content('교정을 완료하지 못했어요', '원문은 그대로예요. 계속 작성할 수 있어요.', [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('계속 작성하기'),
-          ),
-        ]);
-      }
-      final candidate = snapshot.requireData;
-      if (candidate == widget.original) {
-        return _content('수정 제안이 없어요', '작성한 문장은 그대로 유지돼요.', [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('확인'),
-          ),
-        ]);
-      }
-      return _content('이렇게 바꿔 볼까요?', '바뀐 부분을 확인하고 적용할지 선택해 주세요.', [
-        _example('원문', widget.original),
-        _example('수정 후보', candidate),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(candidate),
-          child: const Text('수정 후보 적용'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('원문 유지'),
-        ),
-      ]);
-    },
-  );
-
-  Widget _content(
-    String title,
-    String message, [
-    List<Widget> actions = const [],
-  ]) => Column(
+  Widget build(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     spacing: 12,
     children: [
       Text(
-        title,
+        _items.isEmpty ? '고칠 부분을 찾지 못했습니다.' : '교정 제안 ${_items.length}개',
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
       ),
       Text(
-        message,
+        _items.isEmpty
+            ? '검사를 마친 부분에서는 고칠 곳이 없었습니다.'
+            : '적용할 제안을 골라 주세요. 적용한 뒤에도 원문으로 되돌릴 수 있습니다.',
         style: const TextStyle(fontSize: 14, color: CampusColors.secondaryInk),
       ),
-      ...actions,
+      if (widget.result.failedSegments > 0)
+        const Text('교정하지 못한 부분은 원문으로 유지했습니다.'),
+      if (_items.length > 1)
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            key: const ValueKey('ai-select-all'),
+            onPressed: () => setState(() {
+              _selected.length == _items.length
+                  ? _selected.clear()
+                  : _selected.addAll(_items);
+            }),
+            child: Text(_selected.length == _items.length ? '모두 해제' : '모두 선택'),
+          ),
+        ),
+      for (final item in _items) _suggestion(item),
+      if (_items.isEmpty)
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('확인'),
+        )
+      else ...[
+        FilledButton(
+          key: const ValueKey('ai-apply'),
+          onPressed: _selected.isEmpty ? null : _apply,
+          child: Text('${_selected.length}개 적용'),
+        ),
+        TextButton(
+          key: const ValueKey('ai-keep-original'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('원문 유지'),
+        ),
+      ],
     ],
   );
 
-  Widget _example(String label, String value) => DecoratedBox(
+  Widget _suggestion(CorrectionSuggestion item) => DecoratedBox(
     decoration: BoxDecoration(
       color: CampusColors.background,
       borderRadius: BorderRadius.circular(12),
@@ -123,19 +166,72 @@ class _CorrectionSheetState extends State<_CorrectionSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 8,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          Row(
+            children: [
+              Checkbox(
+                value: _selected.contains(item),
+                semanticLabel: '${item.reason} 제안 적용',
+                onChanged: (_) => _toggle(item),
+              ),
+              Expanded(
+                child: Text(
+                  item.reason,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 15,
-              color: CampusColors.secondaryInk,
-            ),
-          ),
+          _diffLine('원문', item, DiffKind.removed),
+          _diffLine('제안', item, DiffKind.added),
         ],
       ),
     ),
   );
+
+  Widget _diffLine(
+    String label,
+    CorrectionSuggestion item,
+    DiffKind highlight,
+  ) {
+    final spans = diffText(
+      widget.result.originalText.substring(item.start, item.end),
+      item.replacement,
+    );
+    final colors = Theme.of(context).colorScheme;
+    final marked = highlight == DiffKind.removed
+        ? TextStyle(
+            color: colors.onErrorContainer,
+            backgroundColor: colors.errorContainer,
+            decoration: TextDecoration.lineThrough,
+          )
+        : TextStyle(
+            color: colors.onPrimaryContainer,
+            backgroundColor: colors.primaryContainer,
+            fontWeight: FontWeight.w700,
+          );
+    final shown = spans.where(
+      (span) => span.kind == DiffKind.same || span.kind == highlight,
+    );
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: '$label  '),
+          if (shown.isEmpty)
+            TextSpan(
+              text: highlight == DiffKind.added ? '(삭제)' : '(없음)',
+              style: marked,
+            )
+          else
+            for (final span in shown)
+              TextSpan(
+                text: span.text,
+                style: span.kind == DiffKind.same ? null : marked,
+              ),
+        ],
+      ),
+    );
+  }
 }
