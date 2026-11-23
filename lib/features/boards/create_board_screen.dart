@@ -52,6 +52,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
       key: _form,
       child: ListView(
         padding: const EdgeInsets.all(16),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         children: [
           _label('게시판 이름', '${_name.text.runes.length} / 20'),
           TextFormField(

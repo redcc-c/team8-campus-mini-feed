@@ -20,6 +20,44 @@ final campusTheme = ThemeData(
     error: CampusColors.error,
   ),
   scaffoldBackgroundColor: CampusColors.background,
+  textSelectionTheme: const TextSelectionThemeData(
+    cursorColor: CampusColors.primary,
+    selectionColor: Color(0x660E8068),
+    selectionHandleColor: CampusColors.primary,
+  ),
+  // Plain ripple instead of the sparkle effect: quieter, and cheaper on low-end phones.
+  splashFactory: InkRipple.splashFactory,
+  dividerTheme: const DividerThemeData(
+    color: CampusColors.border,
+    thickness: 1,
+    space: 24,
+  ),
+  snackBarTheme: SnackBarThemeData(
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: CampusColors.ink,
+    contentTextStyle: const TextStyle(
+      fontFamily: 'Noto Sans KR',
+      color: Colors.white,
+      fontSize: 14,
+      height: 20 / 14,
+    ),
+    insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+  textButtonTheme: TextButtonThemeData(
+    style: TextButton.styleFrom(
+      minimumSize: const Size(48, 48),
+      textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+    ),
+  ),
+  floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    foregroundColor: Colors.white,
+    highlightElevation: 4,
+  ),
+  progressIndicatorTheme: const ProgressIndicatorThemeData(
+    color: CampusColors.primary,
+    linearTrackColor: CampusColors.primarySoft,
+  ),
   appBarTheme: const AppBarTheme(
     backgroundColor: CampusColors.background,
     foregroundColor: CampusColors.ink,
@@ -77,6 +115,17 @@ class CampusApp extends StatelessWidget {
     title: '캠퍼스 미니 피드',
     debugShowCheckedModeBanner: false,
     theme: campusTheme,
+    // On tablets, foldables and wide windows a phone feed stretched edge to
+    // edge is hard to read, so the content keeps a readable column width.
+    builder: (context, child) => ColoredBox(
+      color: CampusColors.background,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: child,
+        ),
+      ),
+    ),
     home: FeedScreen(services: services),
   );
 }

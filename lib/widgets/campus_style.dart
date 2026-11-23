@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 abstract final class CampusColors {
@@ -62,9 +63,44 @@ class CampusBookmarkButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IconButton(
     tooltip: selected ? '북마크 해제' : '북마크 저장',
-    onPressed: onPressed,
-    icon: CampusIcon(selected ? 'bookmark-selected' : 'bookmark'),
+    isSelected: selected,
+    onPressed: () {
+      HapticFeedback.selectionClick();
+      onPressed();
+    },
+    icon: CampusPop(
+      active: selected,
+      child: CampusIcon(selected ? 'bookmark-selected' : 'bookmark'),
+    ),
   );
+}
+
+/// Swaps an icon with a short scale-and-fade so a toggle visibly answers the
+/// tap; it never animates from nothing, and it is skipped when the system asks
+/// for reduced motion.
+class CampusPop extends StatelessWidget {
+  const CampusPop({required this.active, required this.child, super.key});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeOutCubic,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween(begin: 0.8, end: 1.0).animate(animation),
+          child: child,
+        ),
+      ),
+      child: KeyedSubtree(key: ValueKey(active), child: child),
+    );
+  }
 }
 
 class CampusChoice extends StatelessWidget {

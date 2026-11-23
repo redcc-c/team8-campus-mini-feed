@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
@@ -6,6 +7,17 @@ import 'widgets/campus_style.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Release builds otherwise show a blank grey box when a widget fails.
+  if (kReleaseMode) {
+    ErrorWidget.builder = (_) => const Material(
+      color: CampusColors.background,
+      child: CampusStatus(
+        icon: 'feed-error',
+        title: '화면을 표시하지 못했어요',
+        message: '뒤로 갔다가 다시 열어 주세요.',
+      ),
+    );
+  }
   runApp(const BootstrapApp());
 }
 

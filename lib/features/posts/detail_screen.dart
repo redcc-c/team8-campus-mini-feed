@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/bootstrap.dart';
 import '../../core/models.dart';
@@ -79,7 +80,7 @@ class _DetailScreenState extends State<DetailScreen> {
   Future<void> _correctComment() async {
     final original = _comment.text;
     if (!_form.currentState!.validate()) return;
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     final changed = await showCorrectionSheet(
       context,
       widget.services.correction,
@@ -102,6 +103,7 @@ class _DetailScreenState extends State<DetailScreen> {
   });
 
   Future<void> _toggleLike() async {
+    HapticFeedback.lightImpact();
     setState(() => _liking = true);
     try {
       await widget.services.repository
@@ -233,12 +235,28 @@ class _DetailScreenState extends State<DetailScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(
-                widget.board.name,
-                style: const TextStyle(
-                  color: CampusColors.onPrimarySoft,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+              Align(
+                alignment: Alignment.centerLeft,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: CampusColors.primarySoft,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
+                    child: Text(
+                      widget.board.name,
+                      style: const TextStyle(
+                        color: CampusColors.onPrimarySoft,
+                        fontSize: 13,
+                        height: 18 / 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -308,8 +326,33 @@ class _DetailScreenState extends State<DetailScreen> {
                       snapshot: snapshot,
                       builder: (comments) => comments.isEmpty
                           ? const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text('첫 댓글을 남겨 보세요.'),
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: Center(
+                                child: Column(
+                                  spacing: 8,
+                                  children: [
+                                    CampusIcon(
+                                      'comment',
+                                      size: 32,
+                                      color: CampusColors.disabledInk,
+                                    ),
+                                    Text(
+                                      '아직 댓글이 없어요',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      '첫 댓글을 남겨 보세요.',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: CampusColors.secondaryInk,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             )
                           : Column(
                               children: [
@@ -367,7 +410,10 @@ class _DetailScreenState extends State<DetailScreen> {
         child: TextButton.icon(
           key: const ValueKey('like'),
           onPressed: _liking || !snapshot.hasData ? null : _toggleLike,
-          icon: CampusIcon(liked ? 'heart-selected' : 'heart'),
+          icon: CampusPop(
+            active: liked,
+            child: CampusIcon(liked ? 'heart-selected' : 'heart'),
+          ),
           label: Text('${likes.length}', style: _metaStyle),
         ),
       );
