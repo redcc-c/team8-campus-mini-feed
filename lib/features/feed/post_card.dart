@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/models.dart';
 import '../../data/community_repository.dart';
@@ -38,6 +39,7 @@ class _PostCardState extends State<PostCard> {
   bool _liking = false;
 
   Future<void> _toggleLike() async {
+    HapticFeedback.lightImpact();
     setState(() => _liking = true);
     try {
       await widget.repository
@@ -84,7 +86,7 @@ class _PostCardState extends State<PostCard> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: CampusColors.muted,
+                      color: CampusColors.primarySoft,
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Align(
@@ -197,7 +199,10 @@ class _PostCardState extends State<PostCard> {
                       final likes = snapshot.data ?? const <String>{};
                       final liked = likes.contains(widget.repository.userId);
                       return _action(
-                        icon: CampusIcon(liked ? 'heart-selected' : 'heart'),
+                        icon: CampusPop(
+                          active: liked,
+                          child: CampusIcon(liked ? 'heart-selected' : 'heart'),
+                        ),
                         count: likes.length,
                         label: liked ? '공감 취소' : '공감',
                         onTap: _liking || !snapshot.hasData
@@ -261,4 +266,9 @@ class _PostCardState extends State<PostCard> {
   );
 }
 
-const _metaStyle = TextStyle(fontSize: 12, color: CampusColors.secondaryInk);
+// Tabular figures keep like/comment counts from jiggling as they change.
+const _metaStyle = TextStyle(
+  fontSize: 12,
+  color: CampusColors.secondaryInk,
+  fontFeatures: [FontFeature.tabularFigures()],
+);

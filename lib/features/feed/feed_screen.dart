@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/bootstrap.dart';
 import '../../core/models.dart';
@@ -88,6 +89,20 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _chooseTab(_FeedTab tab) {
+    HapticFeedback.selectionClick();
+    // Tapping the tab you are already on brings its list back to the top.
+    if (tab == _tab && _scroll.hasClients) {
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _scroll.jumpTo(0);
+      } else {
+        _scroll.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return;
+    }
     _scrollToTop();
     setState(() => _tab = tab);
   }
@@ -303,6 +318,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 child: _list(
                   posts: visible,
                   byId: byId,
+                  fullBleedHeader: true,
                   header: _latestHeader(
                     boards,
                     visible.any((post) => post.pending),
@@ -382,49 +398,64 @@ class _FeedScreenState extends State<FeedScreen> {
     required Map<String, Board> byId,
     required Widget header,
     bool showPhotos = false,
+    bool fullBleedHeader = false,
     Widget? empty,
   }) {
     final indexById = {for (final (i, post) in posts.indexed) post.id: i + 1};
-    return ListView.builder(
-      key: ValueKey(
-        _tab == _FeedTab.latest ? 'feed-list' : 'feed-${_tab.name}',
-      ),
+    // The horizontal inset lives on each row instead of the list, so the filter
+    // chips can scroll edge to edge; the bottom adds the system bar's height.
+    const side = EdgeInsets.symmetric(horizontal: 16);
+    return Scrollbar(
       controller: _scroll,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(16, 16, 16, _showCompose ? 88 : 16),
-      itemCount: posts.isEmpty && empty != null ? 2 : posts.length + 1,
-      findChildIndexCallback: (key) =>
-          key is ValueKey<String> ? indexById[key.value] : null,
-      itemBuilder: (context, index) {
-        if (index == 0) {
+      child: ListView.builder(
+        key: ValueKey(
+          _tab == _FeedTab.latest ? 'feed-list' : 'feed-${_tab.name}',
+        ),
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: 16,
+          bottom:
+              (_showCompose ? 88 : 16) + MediaQuery.paddingOf(context).bottom,
+        ),
+        itemCount: posts.isEmpty && empty != null ? 2 : posts.length + 1,
+        findChildIndexCallback: (key) =>
+            key is ValueKey<String> ? indexById[key.value] : null,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: 8,
+                left: fullBleedHeader ? 0 : 16,
+                right: fullBleedHeader ? 0 : 16,
+              ),
+              child: header,
+            );
+          }
+          if (posts.isEmpty) return Padding(padding: side, child: empty);
+          final post = posts[index - 1];
+          final board =
+              byId[post.boardId] ??
+              widget.board ??
+              Board(id: post.boardId, name: '게시판', description: '');
           return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: header,
+            key: ValueKey(post.id),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: PostCard(
+              key: ValueKey('post-${post.id}'),
+              board: board,
+              post: post,
+              repository: widget.services.repository,
+              bookmarked: _bookmarks.hasPost(post.id),
+              showPhoto: showPhotos,
+              onBookmark: () => _bookmarks.togglePost(post.id),
+              onMenu: () =>
+                  openPostReport(context, widget.services.repository, post.id),
+              onOpen: () => _openPost(board, post, showPhoto: showPhotos),
+            ),
           );
-        }
-        if (posts.isEmpty) return empty;
-        final post = posts[index - 1];
-        final board =
-            byId[post.boardId] ??
-            widget.board ??
-            Board(id: post.boardId, name: '게시판', description: '');
-        return Padding(
-          key: ValueKey(post.id),
-          padding: const EdgeInsets.only(bottom: 8),
-          child: PostCard(
-            key: ValueKey('post-${post.id}'),
-            board: board,
-            post: post,
-            repository: widget.services.repository,
-            bookmarked: _bookmarks.hasPost(post.id),
-            showPhoto: showPhotos,
-            onBookmark: () => _bookmarks.togglePost(post.id),
-            onMenu: () =>
-                openPostReport(context, widget.services.repository, post.id),
-            onOpen: () => _openPost(board, post, showPhoto: showPhotos),
-          ),
-        );
-      },
+        },
+      ),
     );
   }
 
@@ -432,53 +463,77 @@ class _FeedScreenState extends State<FeedScreen> {
     crossAxisAlignment: CrossAxisAlignment.start,
     spacing: 8,
     children: [
-      Row(
-        spacing: 8,
-        children: [
-          const CampusIcon('shield'),
-          Expanded(
-            child: Text(
-              anonymousName(widget.services.repository.userId),
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: CampusColors.secondaryInk,
-              ),
-            ),
-          ),
-        ],
-      ),
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
-          spacing: 6,
+          spacing: 8,
           children: [
-            CampusChoice(
-              key: const ValueKey('filter-all'),
-              label: '전체',
-              selected: _filter == null,
-              onTap: () => _chooseFilter(null),
-            ),
-            for (final board in boards)
-              CampusChoice(
-                key: ValueKey('filter-${board.id}'),
-                label: board.shortName,
-                selected: _filter == board.id,
-                onTap: () => _chooseFilter(board.id),
+            const CampusIcon('shield'),
+            Expanded(
+              child: Text(
+                anonymousName(widget.services.repository.userId),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: CampusColors.secondaryInk,
+                ),
               ),
+            ),
           ],
         ),
       ),
-      const Row(
-        children: [
-          Expanded(child: Text('새로운 이야기', style: _headingStyle)),
-          Text('최신순', style: _metaStyle),
-        ],
+      // The edges fade so a row that happens to fit exactly still reads as
+      // scrollable when more boards exist off screen.
+      ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (bounds) => LinearGradient(
+          colors: const [
+            Color(0x00000000),
+            Color(0xFF000000),
+            Color(0xFF000000),
+            Color(0x00000000),
+          ],
+          stops: [0, 16 / bounds.width, 1 - 24 / bounds.width, 1],
+        ).createShader(bounds),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            spacing: 6,
+            children: [
+              CampusChoice(
+                key: const ValueKey('filter-all'),
+                label: '전체',
+                selected: _filter == null,
+                onTap: () => _chooseFilter(null),
+              ),
+              for (final board in boards)
+                CampusChoice(
+                  key: ValueKey('filter-${board.id}'),
+                  label: board.shortName,
+                  selected: _filter == board.id,
+                  onTap: () => _chooseFilter(board.id),
+                ),
+            ],
+          ),
+        ),
+      ),
+      const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Expanded(child: Text('새로운 이야기', style: _headingStyle)),
+            Text('최신순', style: _metaStyle),
+          ],
+        ),
       ),
       if (hasPending)
-        const Text(
-          '서버에 전송하고 있어요.',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            '서버에 전송하고 있어요.',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
         ),
     ],
   );
@@ -576,37 +631,68 @@ class _FeedScreenState extends State<FeedScreen> {
   );
 }
 
-class _LoadingFeed extends StatelessWidget {
+class _LoadingFeed extends StatefulWidget {
   const _LoadingFeed();
+
+  @override
+  State<_LoadingFeed> createState() => _LoadingFeedState();
+}
+
+class _LoadingFeedState extends State<_LoadingFeed>
+    with SingleTickerProviderStateMixin {
+  // A slow breathing pulse tells the user the skeleton is alive, not stuck.
+  late final _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+    lowerBound: 0.55,
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulse.value = 1;
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Semantics(
     label: '게시글을 불러오고 있어요',
-    child: ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        for (final height in [216.0, 192.0, 192.0])
-          Container(
-            height: height,
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: CampusColors.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 8,
-              children: [
-                _line(200, 16),
-                _line(272, 24),
-                _line(double.infinity, 21),
-                _line(120, 48),
-              ],
-            ),
+    child: FadeTransition(opacity: _pulse, child: _skeleton()),
+  );
+
+  Widget _skeleton() => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [
+      for (final height in [216.0, 192.0, 192.0])
+        Container(
+          height: height,
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: CampusColors.surface,
+            borderRadius: BorderRadius.circular(12),
           ),
-      ],
-    ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 8,
+            children: [
+              _line(200, 16),
+              _line(272, 24),
+              _line(double.infinity, 21),
+              _line(120, 48),
+            ],
+          ),
+        ),
+    ],
   );
 
   Widget _line(double width, double height) => Container(
@@ -628,4 +714,5 @@ const _metaStyle = TextStyle(
   fontSize: 12,
   height: 16 / 12,
   color: CampusColors.tertiaryInk,
+  fontFeatures: [FontFeature.tabularFigures()],
 );

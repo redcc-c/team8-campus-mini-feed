@@ -63,7 +63,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
         !_form.currentState!.validate()) {
       return;
     }
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _saving = true;
       _saveFailed = false;
@@ -93,7 +93,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
   }
 
   Future<void> _pickPhotos() async {
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _pickingPhoto = true;
       _photoError = null;
@@ -140,7 +140,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
     final original = _content.text;
     final run = ++_checkRun;
     bool cancelled() => run != _checkRun || !mounted;
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     aiDiagnostics.value = null;
     setState(() {
       _checking = true;
@@ -282,6 +282,8 @@ class _ComposeScreenState extends State<ComposeScreen> {
               key: _form,
               child: ListView(
                 padding: const EdgeInsets.all(16),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 children: [
                   _fieldLabel('게시판'),
                   FormField<String>(
@@ -298,7 +300,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
                         onTap: _saving
                             ? null
                             : () async {
-                                FocusScope.of(context).unfocus();
+                                FocusManager.instance.primaryFocus?.unfocus();
                                 final selected = await _pickBoard();
                                 if (!mounted || selected == null) return;
                                 field.didChange(selected.id);

@@ -75,7 +75,7 @@ class _ReportSheetState extends State<_ReportSheet> {
     final reason = _reason;
     if (reason == null || _sending) return;
     final details = _details.text.trim();
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _sending = true;
       _failed = false;
