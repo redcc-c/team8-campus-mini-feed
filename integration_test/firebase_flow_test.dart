@@ -29,6 +29,7 @@ void main() {
       title: '에뮬레이터 제목',
       content: 'Firebase Android 통합 테스트',
     );
+    await repo.refreshPosts('free').timeout(const Duration(seconds: 15));
     final posts = await repo
         .watchPosts('free')
         .firstWhere((posts) => posts.any((value) => value.id == post.id))

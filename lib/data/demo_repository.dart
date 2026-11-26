@@ -220,6 +220,9 @@ class DemoCommunityRepository implements CommunityRepository {
     return List.unmodifiable(posts);
   });
   @override
+  Future<void> refreshPosts(String boardId) async => _changes.add(null);
+
+  @override
   Stream<List<FeedComment>> watchComments(String postId) => _watch(
     () => List.unmodifiable(
       _comments.where((comment) => comment.postId == postId),

@@ -1,6 +1,6 @@
-# Firebase 로컬 개발 안내
+# Firebase 연결 안내
 
-현재 앱은 체험 모드와 Emulator 모드만 자동으로 선택한다. 실제 Firebase 프로젝트 생성·Google 로그인·결제·원격 배포는 이 초기 준비에 포함하지 않았다.
+`flutter run`은 체험 모드, `USE_FIREBASE_EMULATORS=true`는 로컬 Emulator 모드, `USE_FIREBASE_CLOUD=true`는 팀 Firebase 프로젝트 연결에 사용한다.
 
 ## 설치 조건
 
@@ -55,10 +55,29 @@ npx.cmd firebase emulators:start --only auth,firestore --project demo-team8-camp
 - 로컬 HTTP는 Android debug manifest에서만 허용했다. release 앱의 네트워크 보안 설정을 약화시키지 않았다.
 - Firestore 인덱스 정의는 저장소에 있지만 Emulator는 실제 서비스의 복합 인덱스 동작을 완전히 대체하지 않는다.
 
-## 실제 Firebase 테스트 프로젝트 연결 시 할 일
+## 팀 Firebase 프로젝트 연결 (Android)
 
-담당자와 팀원이 공동으로 프로젝트와 접근 권한을 정한다. Authentication 익명 로그인을 활성화하고 Firestore를 준비한 뒤 FlutterFire CLI로 플랫폼 앱을 등록한다. 생성한 로컬 `firebase_options.dart`와 플랫폼 구성을 사용하도록 `lib/core/bootstrap.dart`에 실제 프로젝트용 분기를 명시적으로 추가한다. 현재 Emulator 분기의 `demoProjectId`를 운영 ID로 단순 치환하지 않는다.
+1. Firebase 콘솔에 Android 앱 `com.team8.campus_mini_feed`를 등록한다. Authentication에서는 익명 로그인 제공자를 켜고, Cloud Firestore 기본 데이터베이스를 생성한다.
+2. 저장소의 `firestore.rules`와 `firestore.indexes.json`을 적용한다. 저장소 루트에서 `npx.cmd firebase login` 후 `npx.cmd firebase deploy --only firestore --project YOUR_FIREBASE_PROJECT_ID`를 실행한다. 콘솔에서 `posts` 복합 인덱스가 준비된 상태인지 확인한다.
+3. 콘솔에서 `boards/free` 문서를 만들고 `name`(예: `자유`)과 `description`을 문자열로 입력한다. 추가 게시판은 `scripts/seed-emulator.mjs`의 문서 ID와 필드를 참고한다.
+4. `Copy-Item .env.example .env`로 로컬 설정을 만들고, 등록한 Android 앱의 `google-services.json`에서 해당 패키지의 값을 확인해 채운다. Dart가 Firebase를 직접 초기화하므로 JSON 파일은 앱 소스에 복사할 필요가 없다.
 
-연결 후 실제 테스트 프로젝트에서 두 기기 동기화, 인덱스, 보안 규칙, 오프라인 저장·재시도와 중복 제출을 검증한다. 작성 중 15초 시간 초과가 나도 SDK에 이미 전달된 쓰기는 나중에 완료될 수 있다. 현재 시작 버전은 이를 취소하거나 요청 ID로 중복을 방지하지 않으므로, 재시도 기능을 완성할 때 동일 요청 ID와 서버 확인 절차를 설계한다.
+| `.env` 키 | Android 등록 정보 |
+| --- | --- |
+| `USE_FIREBASE_CLOUD` | `true` |
+| `FIREBASE_API_KEY` | `client[].api_key[].current_key` |
+| `FIREBASE_APP_ID` | `client[].client_info.mobilesdk_app_id` |
+| `FIREBASE_MESSAGING_SENDER_ID` | `project_info.project_number` |
+| `FIREBASE_PROJECT_ID` | `project_info.project_id` |
+
+```powershell
+flutter pub get
+flutter devices
+flutter run -d DEVICE_ID --dart-define-from-file=.env
+```
+
+두 Android 기기에 각자 같은 프로젝트 설정을 사용한다. 앱은 기존 익명 세션을 재사용하고, 세션이 없으면 Firebase Authentication에서 익명 UID를 발급받는다. 작성한 글은 Firestore `posts`에 저장되고, 같은 게시판 피드가 실시간 갱신된다. 당겨서 새로고침하면 같은 쿼리로 서버에 직접 조회한다. 두 기기에서 글 표시를 확인하고 Firestore 콘솔에서도 문서를 확인한다.
+
+작성 화면의 15초 시간 초과는 Firestore 쓰기를 취소하지 않는다. 통신 복구 후 같은 글을 재시도할 때 중복 저장을 막는 작업은 후속 범위다.
 
 공식 참고: [Flutter 설정](https://firebase.google.com/docs/flutter/setup), [Firestore Emulator](https://firebase.google.com/docs/emulator-suite/connect_firestore), [CLI와 별칭](https://firebase.google.com/docs/cli#source_control_and_project_aliases)
