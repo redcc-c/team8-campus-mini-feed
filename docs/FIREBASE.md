@@ -1,6 +1,31 @@
-# Firebase 로컬 개발 안내
+# Firebase 실행 안내
 
-현재 앱은 체험 모드와 Emulator 모드만 자동으로 선택한다. 실제 Firebase 프로젝트 생성·Google 로그인·결제·원격 배포는 이 초기 준비에 포함하지 않았다.
+기본 실행은 메모리 기반 체험 모드다. 실제 팀 프로젝트에 글을 저장하려면 클라우드 모드로 실행한다.
+
+## 팀 프로젝트에 연결하기 (Android)
+
+1. Firebase 콘솔에 Android 앱 `com.team8.campus_mini_feed`를 등록하고 Authentication의 로그인 방법에서 **익명**을 활성화한다. Cloud Firestore 기본 데이터베이스를 생성한다.
+2. 처음 한 번 또는 규칙·인덱스 변경 시 저장소 루트에서 `npm.cmd ci`, `npx.cmd firebase login`, `npx.cmd firebase deploy --only firestore --project YOUR_PROJECT_ID`를 실행한다. 현재 규칙은 게시글의 제목도 허용한다.
+3. 콘솔의 Firestore 데이터 탭에서 `boards/free` 문서를 만들고 문자열 필드 `name`과 `description`을 입력한다. 예시는 각각 `자유`, `캠퍼스 이야기`다. 게시판이 하나 이상 있어야 홈에 글쓰기 버튼이 표시된다.
+4. 저장소 루트에 `.env`가 없으면 `Copy-Item .env.example .env`로 만든다. `USE_FIREBASE_CLOUD=true`를 지정하고 Android 앱의 등록 정보를 채운다. 로컬 Emulator 플래그는 끈다.
+
+| .env 키 | google-services.json의 해당 Android 앱 값 |
+| --- | --- |
+| FIREBASE_PROJECT_ID | project_info.project_id |
+| FIREBASE_MESSAGING_SENDER_ID | project_info.project_number |
+| FIREBASE_APP_ID | client_info.mobilesdk_app_id |
+| FIREBASE_API_KEY | api_key의 current_key |
+
+Android 기기를 연결하거나 가상 기기를 켜고 다음 명령을 실행한다.
+
+```powershell
+flutter pub get
+flutter devices
+# emulator-5554 자리에 위 목록의 Android 기기 ID를 입력한다.
+flutter run -d emulator-5554 --dart-define-from-file=.env
+```
+
+최신 홈에서 게시판을 선택하고 제목·본문을 등록한 뒤 Firestore의 `posts` 문서를 확인한다. 같은 설정으로 실행한 두 번째 기기의 최신 홈과 해당 게시판에서도 글을 볼 수 있다. 당겨서 새로고침하면 서버에 다시 조회한다.
 
 ## 설치 조건
 
@@ -54,11 +79,5 @@ npx.cmd firebase emulators:start --only auth,firestore --project demo-team8-camp
 - 실기기에서는 `adb reverse tcp:8080 tcp:8080`, `adb reverse tcp:9099 tcp:9099` 후 `--dart-define=EMULATOR_HOST=127.0.0.1`을 추가할 수 있다. 실제 기기에서의 검증은 별도로 기록한다.
 - 로컬 HTTP는 Android debug manifest에서만 허용했다. release 앱의 네트워크 보안 설정을 약화시키지 않았다.
 - Firestore 인덱스 정의는 저장소에 있지만 Emulator는 실제 서비스의 복합 인덱스 동작을 완전히 대체하지 않는다.
-
-## 실제 Firebase 테스트 프로젝트 연결 시 할 일
-
-담당자와 팀원이 공동으로 프로젝트와 접근 권한을 정한다. Authentication 익명 로그인을 활성화하고 Firestore를 준비한 뒤 FlutterFire CLI로 플랫폼 앱을 등록한다. 생성한 로컬 `firebase_options.dart`와 플랫폼 구성을 사용하도록 `lib/core/bootstrap.dart`에 실제 프로젝트용 분기를 명시적으로 추가한다. 현재 Emulator 분기의 `demoProjectId`를 운영 ID로 단순 치환하지 않는다.
-
-연결 후 실제 테스트 프로젝트에서 두 기기 동기화, 인덱스, 보안 규칙, 오프라인 저장·재시도와 중복 제출을 검증한다. 작성 중 15초 시간 초과가 나도 SDK에 이미 전달된 쓰기는 나중에 완료될 수 있다. 현재 시작 버전은 이를 취소하거나 요청 ID로 중복을 방지하지 않으므로, 재시도 기능을 완성할 때 동일 요청 ID와 서버 확인 절차를 설계한다.
 
 공식 참고: [Flutter 설정](https://firebase.google.com/docs/flutter/setup), [Firestore Emulator](https://firebase.google.com/docs/emulator-suite/connect_firestore), [CLI와 별칭](https://firebase.google.com/docs/cli#source_control_and_project_aliases)

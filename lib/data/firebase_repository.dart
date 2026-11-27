@@ -4,7 +4,7 @@ import '../core/models.dart';
 import '../core/validation.dart';
 import 'community_repository.dart';
 
-/// Emulator adapter. Production bootstrap is a separate team task.
+/// Firestore implementation shared by the cloud and local Emulator modes.
 class FirebaseCommunityRepository
     implements CommunityRepository, PostAvailability {
   FirebaseCommunityRepository({
@@ -26,27 +26,35 @@ class FirebaseCommunityRepository
       .where((snapshot) => snapshot.exists || !snapshot.metadata.isFromCache)
       .map((snapshot) => snapshot.exists);
 
-  @override
-  Stream<List<Board>> watchBoards() => _db
-      .collection('boards')
-      .orderBy('name')
-      .snapshots()
-      .map(
-        (snapshot) => snapshot.docs
-            .map(
-              (doc) => Board(
-                id: doc.id,
-                name: doc.data()['name'] as String,
-                description: doc.data()['description'] as String,
-              ),
-            )
-            .toList(),
-      );
-  @override
-  Stream<List<FeedPost>> watchPosts([String? boardId]) =>
+  Query<Map<String, dynamic>> get _boards =>
+      _db.collection('boards').orderBy('name');
+
+  Query<Map<String, dynamic>> _feedQuery(String? boardId) =>
       (boardId == null ? _posts : _posts.where('boardId', isEqualTo: boardId))
           .orderBy('createdAt', descending: true)
-          .limit(50)
+          .limit(50);
+
+  @override
+  Future<void> refreshFeed([String? boardId]) async {
+    const options = GetOptions(source: Source.server);
+    await Future.wait([_boards.get(options), _feedQuery(boardId).get(options)]);
+  }
+
+  @override
+  Stream<List<Board>> watchBoards() => _boards.snapshots().map(
+    (snapshot) => snapshot.docs
+        .map(
+          (doc) => Board(
+            id: doc.id,
+            name: doc.data()['name'] as String,
+            description: doc.data()['description'] as String,
+          ),
+        )
+        .toList(),
+  );
+  @override
+  Stream<List<FeedPost>> watchPosts([String? boardId]) =>
+      _feedQuery(boardId)
           .snapshots(includeMetadataChanges: true)
           .map(
             (snapshot) => snapshot.docs.map((doc) {

@@ -5,6 +5,7 @@ abstract interface class CommunityRepository {
   String get userId;
   Stream<List<Board>> watchBoards();
   Stream<List<FeedPost>> watchPosts([String? boardId]);
+  Future<void> refreshFeed([String? boardId]);
   Stream<List<FeedComment>> watchComments(String postId);
   Stream<Set<String>> watchLikes(String postId);
   Future<FeedPost> createPost({

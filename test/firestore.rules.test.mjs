@@ -1,7 +1,8 @@
+import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { after, before, beforeEach, test } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { deleteDoc, doc, getDoc, getDocs, collection, serverTimestamp, setDoc, setLogLevel, Timestamp } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, getDocs, collection, limit, orderBy, query, serverTimestamp, setDoc, setLogLevel, Timestamp, where } from 'firebase/firestore';
 
 setLogLevel('silent');
 let env;
@@ -103,4 +104,20 @@ test('report creation is restricted; report contents are never readable by clien
 });
 test('unlisted collections are denied', async () => {
   await assertFails(setDoc(doc(user(), 'private/config'), { role: 'admin' }));
+});
+test('a peer can load a new titled post in both the home and board feeds', async () => {
+  const post = payload({ title: '테스트 제목' });
+  await assertSucceeds(setDoc(doc(user(), 'posts/new-post'), post));
+  const posts = collection(user('reader'), 'posts');
+  const newest = orderBy('createdAt', 'desc');
+  for (const feed of [
+    query(posts, newest, limit(50)),
+    query(posts, where('boardId', '==', 'free'), newest, limit(50)),
+  ]) {
+    const snapshot = await assertSucceeds(getDocs(feed));
+    assert.equal(snapshot.size, 1);
+    assert.equal(snapshot.docs[0].id, 'new-post');
+    assert.equal(snapshot.docs[0].data().title, post.title);
+    assert.equal(snapshot.docs[0].data().content, post.content);
+  }
 });

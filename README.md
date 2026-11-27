@@ -41,11 +41,15 @@ Android Studio에서는 프로젝트 루트 폴더를 열고 설치한 Flutter S
 | 기본 실행 대상 | Android 에뮬레이터 또는 실기기 |
 | iOS | 프로젝트 틀 포함, iOS 15 이상 설정. Mac/Xcode에서 별도 빌드 검증 필요 |
 | Firebase 테스트 도구 | Node.js 24 LTS, Java 21, `npm ci` |
-| 실제 프로젝트 | 아직 연결하지 않음. 결제 설정과 원격 배포 없음 |
+| 실제 프로젝트 | Firebase 익명 인증 및 Firestore 게시글 저장·조회 |
 
 `pubspec.lock`, `package-lock.json`, Gradle wrapper를 함께 관리합니다. SDK와 패키지 버전 변경은 PR에서 합의합니다.
 
-## 두 가지 실행 모드
+## 실행 모드
+
+### 팀 Firebase 프로젝트
+
+`.env`에서 `USE_FIREBASE_CLOUD=true`로 설정하고 등록한 Android 앱의 설정값을 입력합니다. Android 기기를 선택하고 `flutter run -d 기기ID --dart-define-from-file=.env`로 실행하면 최신 홈과 게시판별 피드에서 Firestore 게시글을 조회하고 작성할 수 있습니다. 최초 콘솔 설정과 필드명은 [Firebase 실행 안내](docs/FIREBASE.md)를 참고하세요.
 
 ### 체험 모드
 
@@ -82,7 +86,7 @@ flutter run --dart-define=USE_FIREBASE_EMULATORS=true
 | 최신 피드·게시판 필터·인기글·글쓰기·상세 | 피드 페이지네이션과 서버 집계 |
 | 실행 중 북마크 저장, 체험 모드 게시판 생성·사진 첨부 | 영구 저장, Firebase 게시판 생성 권한과 사진 업로드 |
 | 필수 입력 검증, 제목 50·본문 500·댓글 200 코드 포인트 제한 | 사용자 인식 문자 단위의 글자 수 표시와 서버 검증 기준 조정 |
-| 데모 저장소와 Emulator 저장소, 익명 인증 후 최신 홈 진입 | 테스트 Firebase 프로젝트 연결과 두 기기의 피드 동기화 검증 |
+| 데모·Emulator·팀 프로젝트 모드, 익명 인증 후 최신 홈 진입 | 팀 프로젝트에서 두 기기의 피드 동기화 검증 |
 | 기본 댓글·공감·신고 연결 | 동시 요청·중복 요청·여러 기기 검증과 관리자 처리 |
 | AI 서비스 인터페이스, 선택한 교정 제안 적용과 원문 되돌리기 로직 | 지원 Android 기기에서 ML Kit GenAI Proofreading API와 Gemini Nano를 연결하고 한국어 교정·성능 검증 |
 

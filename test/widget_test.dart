@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:campus_mini_feed/app.dart';
 import 'package:campus_mini_feed/core/bootstrap.dart';
+import 'package:campus_mini_feed/core/models.dart';
 import 'package:campus_mini_feed/data/demo_repository.dart';
 import 'package:campus_mini_feed/features/ai/correction_service.dart';
 import 'package:flutter/material.dart';
@@ -87,7 +90,7 @@ void main() {
     expect(find.text('첫 댓글입니다'), findsOneWidget);
   });
 
-  testWidgets('a failed save keeps the author text and enables retry', (
+  testWidgets('save retries preserve the draft and reuse a timed-out write', (
     tester,
   ) async {
     final repository = _FailingRepository();
@@ -127,6 +130,17 @@ void main() {
           .onPressed,
       isNotNull,
     );
+    final publish = find.byKey(const ValueKey('publish'));
+    await tester.tap(publish);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 16));
+    await tester.pumpAndSettle();
+    expect(find.text('다시 등록하기'), findsOneWidget);
+    await tester.tap(publish);
+    repository.allowSave.complete();
+    await tester.pumpAndSettle();
+    expect(repository.attempts, 2);
+    expect(find.byKey(const ValueKey('post-local-1')), findsOneWidget);
   });
 
   testWidgets('MP1 forms fit a 320-wide layout at 200% text size', (
@@ -224,10 +238,17 @@ void main() {
 }
 
 class _FailingRepository extends DemoCommunityRepository {
+  final allowSave = Completer<void>();
+  int attempts = 0;
+
   @override
-  Future<Never> createPost({
+  Future<FeedPost> createPost({
     required String boardId,
     required String content,
     String? title,
-  }) async => throw StateError('Simulated offline write failure');
+  }) async {
+    if (++attempts == 1) throw StateError('Simulated offline write failure');
+    await allowSave.future;
+    return super.createPost(boardId: boardId, content: content, title: title);
+  }
 }

@@ -36,6 +36,8 @@ class _ComposeScreenState extends State<ComposeScreen> {
   late String? _selectedBoardId = widget.board?.id;
   bool _saving = false;
   bool _saveFailed = false;
+  (String, String, String)? _submittedText;
+  Future<FeedPost>? _textSave;
   bool _checking = false;
   // Invalidates late results when a check is stopped or this screen is closed.
   int _checkRun = 0;
@@ -78,17 +80,36 @@ class _ComposeScreenState extends State<ComposeScreen> {
               content: _content.text,
               photos: _photos,
             )
-          : repository.createPost(
-              boardId: _selectedBoardId!,
-              title: _title.text,
-              content: _content.text,
-            );
+          : _saveTextPost();
       final post = await request.timeout(const Duration(seconds: 15));
       if (mounted) Navigator.of(context).pop(post);
     } catch (_) {
       if (mounted) setState(() => _saveFailed = true);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<FeedPost> _saveTextPost() async {
+    final boardId = _selectedBoardId!;
+    final title = _title.text;
+    final content = _content.text;
+    final draft = (boardId, title, content);
+    // The SDK write can finish after the UI timeout. Reuse it for this draft.
+    if (_submittedText != draft || _textSave == null) {
+      _submittedText = draft;
+      _textSave = widget.services.repository.createPost(
+        boardId: boardId,
+        title: title,
+        content: content,
+      );
+    }
+    final request = _textSave!;
+    try {
+      return await request;
+    } catch (_) {
+      if (identical(_textSave, request)) _textSave = null;
+      rethrow;
     }
   }
 

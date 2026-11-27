@@ -8,6 +8,11 @@ void main() {
   testWidgets('Android connects to local anonymous auth and Firestore', (
     tester,
   ) async {
+    expect(
+      const bool.fromEnvironment('USE_FIREBASE_EMULATORS'),
+      isTrue,
+      reason: 'This test writes fixtures to the local Emulator.',
+    );
     final services = await bootstrap();
     expect(
       services.isDemo,
@@ -29,6 +34,13 @@ void main() {
       title: '에뮬레이터 제목',
       content: 'Firebase Android 통합 테스트',
     );
+    await repo.refreshFeed().timeout(const Duration(seconds: 15));
+    final home = await repo
+        .watchPosts()
+        .firstWhere((posts) => posts.any((p) => p.id == post.id && !p.pending))
+        .timeout(const Duration(seconds: 15));
+    expect(home.singleWhere((p) => p.id == post.id).content, post.content);
+    await repo.refreshFeed('free').timeout(const Duration(seconds: 15));
     final posts = await repo
         .watchPosts('free')
         .firstWhere((posts) => posts.any((value) => value.id == post.id))

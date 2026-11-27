@@ -20,6 +20,7 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if signedIn();
       allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['boardId', 'authorId', 'content', 'createdAt'])
         && request.resource.data.keys().hasOnly(['boardId', 'authorId', 'content', 'createdAt', 'title'])
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.boardId is string

@@ -188,6 +188,9 @@ class DemoCommunityRepository implements CommunityRepository {
   @override
   Stream<List<Board>> watchBoards() => _watch(() => List.unmodifiable(_boards));
 
+  @override
+  Future<void> refreshFeed([String? boardId]) async => _changes.add(null);
+
   Board createBoard({
     required String name,
     required String category,

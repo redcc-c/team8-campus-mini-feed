@@ -59,7 +59,7 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   late var _boards = widget.services.repository.watchBoards();
-  late var _posts = widget.services.repository.watchPosts(widget.board?.id);
+  late var _posts = widget.services.repository.watchPosts(_queryBoardId);
   late final _bookmarks = widget.bookmarks ?? FeedBookmarks();
   final _scroll = ScrollController();
   bool _refreshFailed = false;
@@ -69,6 +69,8 @@ class _FeedScreenState extends State<FeedScreen> {
   bool _onlyNotices = false;
 
   bool get _isHome => widget.board == null;
+  String? get _queryBoardId =>
+      widget.board?.id ?? (_tab == _FeedTab.latest ? _filter : null);
   bool get _showCompose =>
       !_isHome || _tab == _FeedTab.latest || _tab == _FeedTab.boards;
 
@@ -84,7 +86,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _chooseFilter(String? id) {
-    setState(() => _filter = id);
+    setState(() => _selectFeed(_tab, id));
     _scrollToTop();
   }
 
@@ -104,27 +106,40 @@ class _FeedScreenState extends State<FeedScreen> {
       return;
     }
     _scrollToTop();
-    setState(() => _tab = tab);
+    setState(() => _selectFeed(tab, _filter));
+  }
+
+  void _selectFeed(_FeedTab tab, String? filter) {
+    final previous = _queryBoardId;
+    _tab = tab;
+    _filter = filter;
+    if (previous != _queryBoardId) {
+      _refreshFailed = false;
+      _posts = widget.services.repository.watchPosts(_queryBoardId);
+    }
   }
 
   void _retry() {
     setState(() {
       _refreshFailed = false;
       _boards = widget.services.repository.watchBoards();
-      _posts = widget.services.repository.watchPosts(widget.board?.id);
+      _posts = widget.services.repository.watchPosts(_queryBoardId);
     });
   }
 
   Future<void> _refresh() async {
-    final repository = widget.services.repository;
+    final boardId = _queryBoardId;
     try {
-      await Future.wait([
-        repository.watchBoards().first,
-        repository.watchPosts(widget.board?.id).first,
-      ]).timeout(const Duration(seconds: 10));
-      if (mounted) _retry();
+      await widget.services.repository
+          .refreshFeed(boardId)
+          .timeout(const Duration(seconds: 10));
+      if (mounted && _queryBoardId == boardId && _refreshFailed) {
+        setState(() => _refreshFailed = false);
+      }
     } catch (_) {
-      if (mounted) setState(() => _refreshFailed = true);
+      if (mounted && _queryBoardId == boardId) {
+        setState(() => _refreshFailed = true);
+      }
     }
   }
 
@@ -141,8 +156,7 @@ class _FeedScreenState extends State<FeedScreen> {
     if (!mounted || post == null) return;
     setState(() {
       if (_isHome) {
-        _tab = _FeedTab.latest;
-        if (_filter != null && _filter != post.boardId) _filter = null;
+        _selectFeed(_FeedTab.latest, _filter == post.boardId ? _filter : null);
       }
       _onlyNotices = false;
     });
@@ -255,78 +269,39 @@ class _FeedScreenState extends State<FeedScreen> {
       final visible = _onlyNotices
           ? posts.where((post) => post.isNotice).toList()
           : posts;
-      return _list(
-        posts: visible,
-        byId: byId,
-        header: _boardHeader(widget.board!, posts.length),
-        showPhotos: true,
-        empty: const Padding(
-          padding: EdgeInsets.symmetric(vertical: 48),
-          child: CampusStatus(
-            icon: 'feed-empty',
-            title: '아직 글이 없어요',
-            message: '첫 이야기를 남겨 보세요.',
+      return _refreshable(
+        _list(
+          posts: visible,
+          byId: byId,
+          header: _boardHeader(widget.board!, posts.length),
+          showPhotos: true,
+          empty: const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: CampusStatus(
+              icon: 'feed-empty',
+              title: '아직 글이 없어요',
+              message: '첫 이야기를 남겨 보세요.',
+            ),
           ),
         ),
       );
     }
     switch (_tab) {
       case _FeedTab.latest:
-        final visible = _filter == null
-            ? posts
-            : posts.where((post) => post.boardId == _filter).toList();
-        if (visible.isEmpty) {
-          return CampusStatus(
-            icon: 'feed-empty',
-            title: '조건에 맞는 글이 없어요',
-            message: '다른 조건으로 찾아볼까요?',
-            actionLabel: '필터 초기화',
-            onAction: () => _chooseFilter(null),
-          );
-        }
-        return Column(
-          children: [
-            if (_refreshFailed)
-              ColoredBox(
-                color: CampusColors.errorSoft,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    spacing: 8,
-                    children: [
-                      const CampusIcon('write-error', size: 24),
-                      const Expanded(
-                        child: Text(
-                          '불러오지 못했어요. 연결을 확인해 주세요.',
-                          style: TextStyle(color: CampusColors.error),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _refresh,
-                        child: const Text('다시 시도'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _refresh,
-                child: _list(
-                  posts: visible,
-                  byId: byId,
-                  fullBleedHeader: true,
-                  header: _latestHeader(
-                    boards,
-                    visible.any((post) => post.pending),
-                  ),
-                ),
-              ),
+        return _refreshable(
+          _list(
+            posts: posts,
+            byId: byId,
+            fullBleedHeader: true,
+            header: _latestHeader(boards, posts.any((post) => post.pending)),
+            empty: CampusStatus(
+              icon: 'feed-empty',
+              title: '조건에 맞는 글이 없어요',
+              message: '다른 조건으로 찾아볼까요?',
+              actionLabel: '필터 초기화',
+              onAction: () => _chooseFilter(null),
             ),
-          ],
+          ),
         );
       case _FeedTab.popular:
         final start = _period.start(DateTime.now());
@@ -392,6 +367,34 @@ class _FeedScreenState extends State<FeedScreen> {
         );
     }
   }
+
+  Widget _refreshable(Widget list) => Column(
+    children: [
+      if (_refreshFailed)
+        ColoredBox(
+          color: CampusColors.errorSoft,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(
+              spacing: 8,
+              children: [
+                const CampusIcon('write-error', size: 24),
+                const Expanded(
+                  child: Text(
+                    '불러오지 못했어요. 연결을 확인해 주세요.',
+                    style: TextStyle(color: CampusColors.error),
+                  ),
+                ),
+                TextButton(onPressed: _refresh, child: const Text('다시 시도')),
+              ],
+            ),
+          ),
+        ),
+      Expanded(
+        child: RefreshIndicator(onRefresh: _refresh, child: list),
+      ),
+    ],
+  );
 
   Widget _list({
     required List<FeedPost> posts,
